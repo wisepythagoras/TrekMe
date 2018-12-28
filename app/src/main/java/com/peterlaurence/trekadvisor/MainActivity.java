@@ -450,7 +450,10 @@ public class MainActivity extends AppCompatActivity
                 String url = getString(R.string.help_url);
                 Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                 startActivity(browserIntent);
-
+                break;
+            case R.id.nav_about:
+                showAbout();
+                break;
             default:
                 break;
         }
@@ -694,6 +697,18 @@ public class MainActivity extends AppCompatActivity
 
     private void showTrackViewFragment() {
         showFragment(TRACK_VIEW_FRAGMENT_TAG, MAP_LIST_FRAGMENT_TAG, TrackViewFragment.class);
+    }
+
+    private void showAbout() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+
+        View view = getLayoutInflater().inflate(R.layout.dialog_about, null);
+        TextView link = view.findViewById(R.id.trekme_link);
+        link.setMovementMethod(LinkMovementMethod.getInstance());
+        builder.setView(view); //R.id.about_layout
+
+        AlertDialog dialog = builder.create();
+        dialog.show();
     }
 
     /**

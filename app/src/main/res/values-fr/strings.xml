@@ -139,4 +139,8 @@
     <string name="storage_read_only">Votre carte SD est en lecture seule. TrekAdvisor ne peut télécharger des cartes ou fonctionner normalement dans ces conditions.</string>
     <string name="warning_title">Attention</string>
     <string name="service_download_bad_storage">TrekAdvisor ne peut rien écrire sur votre stockage interne ou votre carte SD. C\'est probablement un problème de permission. Veuillez vérifier que TrekAdvisor dispose de toutes ses autorisations, puis redémarrer votre téléphone est conseillé dans ce cas.</string>
+    <string name="about">À propos</string>
+    <string name="about_msg">TrekAdvisor est la version gratuite de TrekMe.</string>
+    <string name="about_msg_desc">Si vous aimez cette application, vous pouvez soutenir son dévelopement en achetant TrekMe, la version payante qui offre des fonctionnalités supplémentaires et un meilleur support utilisateur.</string>
+    <string name="about_trekme_link"><a href="https://play.google.com/store/apps/details?id=com.peterlaurence.trekme&amp;hl=fr">TrekMe sur le PlayStore</a></string>
 </resources>

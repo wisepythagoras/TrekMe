@@ -13,11 +13,17 @@
     <string name="import_menu_title">Import a map</string>
     <string name="help">Help</string>
     <string name="help_url">https://github.com/peterLaurence/TrekAdvisor/blob/master/Readme.md</string>
+    <string name="about">About</string>
     <string name="confirm_exit">Click BACK again to exit</string>
     <string name="no_internet">You must be connected to internet to create a map</string>
     <string name="warning_title">Warning</string>
     <string name="bad_storage_status">There is something wrong with your SD card: we can\'t write to it.\nThis has nothing to do with TrekAdvisor, and it won\'t be able to download maps or save changes.</string>
     <string name="storage_read_only">Your SD card is only accessible as read-only. This means we can\'t write to it and TrekAdvisor won\'t be able to download maps or save changes.</string>
+
+    <!-- About message -->
+    <string name="about_msg">TrekAdvisor is the free version of TrekMe.</string>
+    <string name="about_msg_desc">If you like this app, you can buy TrekMe which offers additional features and a better support.</string>
+    <string name="about_trekme_link"><a href="https://play.google.com/store/apps/details?id=com.peterlaurence.trekme">TrekMe on PlayStore</a></string>
 
     <!-- LocationService -->
     <string name="service_location_name">Location service</string>
