@@ -29,8 +29,6 @@ import com.peterlaurence.trekme.core.projection.Projection
 import com.peterlaurence.trekme.core.projection.ProjectionTask
 import com.peterlaurence.trekme.model.map.MapProvider
 import com.peterlaurence.trekme.ui.mapview.events.TrackVisibilityChangedEvent
-import com.qozix.tileview.TileView
-import com.qozix.tileview.widgets.ZoomPanLayout
 
 import org.greenrobot.eventbus.EventBus
 import org.greenrobot.eventbus.Subscribe
@@ -39,7 +37,11 @@ import androidx.core.app.ActivityCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProviders
+import com.moagrius.tileview.TileView
+import com.moagrius.widget.ScalingScrollView
 import com.peterlaurence.trekme.core.track.TrackImporter
+import com.peterlaurence.trekme.ui.mapview.components.tileview.HandlerTileView
+import com.peterlaurence.trekme.ui.mapview.components.tileview.plugins.CoordinatePlugin
 import com.peterlaurence.trekme.viewmodel.mapview.InMapRecordingViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -58,7 +60,8 @@ class MapViewFragment : Fragment(), ProjectionTask.ProjectionUpdateLister,
         FrameLayoutMapView.PositionTouchListener,
         CoroutineScope {
     private lateinit var rootView: FrameLayoutMapView
-    private lateinit var mTileView: TileViewExtended
+    private lateinit var mTileView: TileView
+    private lateinit var handlerTileView: HandlerTileView
     private var mMap: Map? = null
     private lateinit var positionMarker: View
     private var lockView = false
@@ -342,38 +345,39 @@ class MapViewFragment : Fragment(), ProjectionTask.ProjectionUpdateLister,
         val map = MapProvider.getCurrentMap()
         if (map != null) {
             if (mMap != null && mMap!!.equals(map)) {
-                val newBounds = map.mapBounds
-
-                if (::mTileView.isInitialized) {
-                    val c = mTileView.coordinateTranslater
-                    if (newBounds != null && !newBounds.compareTo(c.left, c.top, c.right, c.bottom)) {
-                        setTileViewBounds(mTileView, map)
-                    }
-                }
+                // logic to detect if calibration changed - simplify this
+//                val newBounds = map.mapBounds
+//
+//                if (::mTileView.isInitialized) {
+//                    val c = mTileView.coordinateTranslater
+//                    if (newBounds != null && !newBounds.compareTo(c.left, c.top, c.right, c.bottom)) {
+//                        setTileViewBounds(mTileView, map)
+//                    }
+//                }
             } else {
                 /* The map changed */
                 setMap(map)
                 inMapRecordingViewModel.reload()
-                updateLayers()
+//                updateLayers()
             }
         }
     }
 
-    private fun updateLayers() {
-        mMap?.let { map ->
-            /* Update the marker layer */
-            markerLayer.init(map, mTileView)
-
-            /* Update the route layer */
-            routeLayer.init(map, mTileView)
-
-            /* Update the distance layer */
-            distanceLayer.init(map, mTileView)
-
-            /* Update the landmark layer */
-            landmarkLayer.init(map, mTileView)
-        }
-    }
+//    private fun updateLayers() {
+//        mMap?.let { map ->
+//            /* Update the marker layer */
+//            markerLayer.init(map, mTileView)
+//
+//            /* Update the route layer */
+//            routeLayer.init(map, mTileView)
+//
+//            /* Update the distance layer */
+//            distanceLayer.init(map, mTileView)
+//
+//            /* Update the landmark layer */
+//            landmarkLayer.init(map, mTileView)
+//        }
+//    }
 
     override fun onStop() {
         job.cancel()
@@ -439,7 +443,7 @@ class MapViewFragment : Fragment(), ProjectionTask.ProjectionUpdateLister,
      * @param y the projected Y coordinate, or latitude if there is no [Projection]
      */
     private fun updatePosition(x: Double, y: Double) {
-        mTileView.moveMarker(positionMarker, x, y)
+//        mTileView.moveMarker(positionMarker, x, y)
         landmarkLayer.onPositionUpdate(x, y)
 
         if (lockView) {
@@ -447,7 +451,7 @@ class MapViewFragment : Fragment(), ProjectionTask.ProjectionUpdateLister,
         }
     }
 
-    private fun setTileView(tileView: TileViewExtended) {
+    private fun setTileView(tileView: TileView) {
         mTileView = tileView
         mTileView.id = R.id.tileview_id
         mTileView.isSaveEnabled = true
@@ -456,10 +460,10 @@ class MapViewFragment : Fragment(), ProjectionTask.ProjectionUpdateLister,
         /* The tileView can have only one MarkerTapListener.
          * It dispatches the tap event to child layers.
          */
-        mTileView.setMarkerTapListener { view: View, x: Int, y: Int ->
-            markerLayer.onMarkerTap(view, x, y)
-            landmarkLayer.onMarkerTap(view, x, y)
-        }
+//        mTileView.setMarkerTapListener { view: View, x: Int, y: Int ->
+//            markerLayer.onMarkerTap(view, x, y)
+//            landmarkLayer.onMarkerTap(view, x, y)
+//        }
     }
 
     private fun removeCurrentTileView() {
@@ -472,46 +476,34 @@ class MapViewFragment : Fragment(), ProjectionTask.ProjectionUpdateLister,
     }
 
     /**
-     * Sets the map to generate a new [TileViewExtended].
+     * Sets the map to generate a new [TileView].
      *
      * @param map The new [Map] object
      */
     private fun setMap(map: Map) {
         mMap = map
-        val tileView = TileViewExtended(this.context)
+        val tileView = TileView(this.context)
+        val builder = TileView.Builder(tileView)
+
+        val levelList = map.levelList
 
         /* Set the size of the view in px at scale 1 */
-        tileView.setSize(map.widthPx, map.heightPx)
+        builder.setSize(map.widthPx, map.heightPx)
 
-        /* Lowest scale */
-        val levelList = map.levelList
-        val minScale = 1 / Math.pow(2.0, (levelList.size - 1).toDouble()).toFloat()
-
-        /* Scale limits */
-        tileView.setScaleLimits(minScale, 2f)
-
-        /* Starting scale */
-        tileView.scale = minScale
+        builder.setStreamProvider { col, row, _, o ->
+            map.tileStreamProvider?.getTileStream(row, col, o as Int)
+        }
 
         /* DetailLevel definition */
-        for (level in levelList) {
-            /* Calculate each level scale for best precision */
-            val scale = 1 / Math.pow(2.0, (levelList.size - level.level - 1).toDouble()).toFloat()
-
-            tileView.addDetailLevel(scale, level.level, level.tile_size.x, level.tile_size.y)
+        levelList.reversed().forEachIndexed { index, _ ->
+            builder.defineZoomLevel(index, levelList.size - 1 - index)
         }
 
         /* Allow the scale to be no less to see the entire map */
-        tileView.setMinimumScaleMode(ZoomPanLayout.MinimumScaleMode.FIT)
-
-        /* Render while panning */
-        tileView.setShouldRenderWhilePanning(true)
+        tileView.setMinimumScaleMode(ScalingScrollView.MinimumScaleMode.COVER)
 
         /* Map calibration */
-        setTileViewBounds(tileView, map)
-
-        /* The BitmapProvider */
-        tileView.setBitmapProvider(map.bitmapProvider)
+        val coordinatePlugin = setTileViewBounds(map)
 
         /* The position + orientation reticule */
         try {
@@ -521,7 +513,18 @@ class MapViewFragment : Fragment(), ProjectionTask.ProjectionUpdateLister,
             // don't care
         }
 
-        tileView.addMarker(positionMarker, 0.0, 0.0, -0.5f, -0.5f)
+//        tileView.addMarker(positionMarker, 0.0, 0.0, -0.5f, -0.5f)
+        handlerTileView = HandlerTileView(builder, coordinatePlugin)
+        builder.build()
+
+//        /* Lowest scale */
+//        val minScale = 1 / Math.pow(2.0, (levelList.size - 1).toDouble()).toFloat()
+
+        /* Scale limits */
+//        tileView.setScaleLimits(0f, 2f)
+
+        /* Starting scale */
+//        tileView.scale = 1f
 
         /* Remove the existing TileView, then add the new one */
         removeCurrentTileView()
@@ -529,9 +532,9 @@ class MapViewFragment : Fragment(), ProjectionTask.ProjectionUpdateLister,
     }
 
     private fun centerOnPosition() {
-        if (::mTileView.isInitialized) {
-            mTileView.moveToMarker(positionMarker, true)
-        }
+//        if (::mTileView.isInitialized) {
+//            mTileView.moveToMarker(positionMarker, true)
+//        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -540,15 +543,15 @@ class MapViewFragment : Fragment(), ProjectionTask.ProjectionUpdateLister,
         outState.putBoolean(WAS_DISPLAYING_ORIENTATION, orientationEventManager.isStarted)
     }
 
-    private fun setTileViewBounds(tileView: TileView, map: Map) {
+    private fun setTileViewBounds(map: Map): CoordinatePlugin {
         val mapBounds = map.mapBounds
-        if (mapBounds != null) {
-            tileView.defineBounds(mapBounds.X0,
+        return if (mapBounds != null) {
+            CoordinatePlugin(mapBounds.X0,
                     mapBounds.Y0,
                     mapBounds.X1,
                     mapBounds.Y1)
         } else {
-            tileView.defineBounds(0.0, 0.0, 1.0, 1.0)
+            CoordinatePlugin(0.0, 0.0, 1.0, 1.0)
         }
     }
 
