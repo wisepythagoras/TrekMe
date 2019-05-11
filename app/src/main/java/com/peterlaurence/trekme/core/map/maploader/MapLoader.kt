@@ -6,6 +6,7 @@ import com.google.gson.GsonBuilder
 import com.peterlaurence.trekme.core.TrekMeContext
 import com.peterlaurence.trekme.core.map.Map
 import com.peterlaurence.trekme.core.map.MapArchive
+import com.peterlaurence.trekme.core.map.TileStreamProvider
 import com.peterlaurence.trekme.core.map.gson.*
 import com.peterlaurence.trekme.core.map.mapimporter.MapImporter
 import com.peterlaurence.trekme.core.map.maploader.events.MapListUpdateEvent
@@ -15,6 +16,7 @@ import com.peterlaurence.trekme.core.projection.Projection
 import com.peterlaurence.trekme.core.projection.UniversalTransverseMercator
 import com.peterlaurence.trekme.model.providers.bitmap.BitmapProviderDummy
 import com.peterlaurence.trekme.model.providers.bitmap.BitmapProviderLibVips
+import com.peterlaurence.trekme.model.providers.stream.TileStreamProviderDefault
 import com.qozix.tileview.graphics.BitmapProvider
 import kotlinx.coroutines.*
 import org.greenrobot.eventbus.EventBus
@@ -201,7 +203,11 @@ object MapLoader : MapImporter.MapImportListener {
         if (map == null) return
 
         /* Set BitMapProvider */
+        // TODO: remove this when TileView 4 migration is done
         map.bitmapProvider = makeBitmapProvider(map)
+
+        /* Set TileStreamProvider */
+        applyTileStreamProviderTo(map)
 
         /* Add the map */
         mMapList.add(map)
@@ -258,7 +264,7 @@ object MapLoader : MapImporter.MapImportListener {
     fun saveMarkers(map: Map) {
         val jsonString = mGson.toJson(map.markerGson)
 
-        val markerFile = File(map.directory, MapLoader.MAP_MARKER_FILE_NAME)
+        val markerFile = File(map.directory, MAP_MARKER_FILE_NAME)
         writeToFile(jsonString, markerFile) {
             Log.e(TAG, "Error while saving the markers")
         }
@@ -270,7 +276,7 @@ object MapLoader : MapImporter.MapImportListener {
      */
     fun saveLandmarks(map: Map) {
         val jsonString = mGson.toJson(map.landmarkGson)
-        val landmarkFile = File(map.directory, MapLoader.MAP_LANDMARK_FILE_NAME)
+        val landmarkFile = File(map.directory, MAP_LANDMARK_FILE_NAME)
 
         writeToFile(jsonString, landmarkFile) {
             Log.e(TAG, "Error while saving the landmarks")
@@ -285,7 +291,7 @@ object MapLoader : MapImporter.MapImportListener {
      */
     fun saveRoutes(map: Map) {
         val jsonString = mGson.toJson(map.routeGson)
-        val routeFile = File(map.directory, MapLoader.MAP_ROUTE_FILE_NAME)
+        val routeFile = File(map.directory, MAP_ROUTE_FILE_NAME)
 
         writeToFile(jsonString, routeFile) {
             Log.e(TAG, "Error while saving the routes")
@@ -405,6 +411,15 @@ object MapLoader : MapImporter.MapImportListener {
         return when (map.origin) {
             BitmapProviderLibVips.GENERATOR_NAME -> BitmapProviderLibVips(map)
             else -> BitmapProviderDummy()
+        }
+    }
+
+    /**
+     * Assign a [TileStreamProvider] to a [Map], if the origin of the [Map] is known.
+     */
+    fun applyTileStreamProviderTo(map: Map) {
+        when (map.origin) {
+            "VIPS" -> map.tileStreamProvider = TileStreamProviderDefault(map.directory, map.imageExtension)
         }
     }
 

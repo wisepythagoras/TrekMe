@@ -77,7 +77,11 @@ fun mapCreationTask(mGson: Gson, vararg dirs: File): List<Map> {
             map.calibrate()
 
             /* Set BitMapProvider */
+            // TODO: remove this when TileView 4 migration is done
             map.bitmapProvider = MapLoader.makeBitmapProvider(map)
+
+            /* Set TileStreamProvider */
+            MapLoader.applyTileStreamProviderTo(map)
 
             mapList.add(map)
         } catch (e: JsonSyntaxException) {

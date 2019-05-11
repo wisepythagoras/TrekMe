@@ -9,7 +9,6 @@ import androidx.fragment.app.Fragment
 import androidx.appcompat.app.AppCompatActivity
 import android.text.method.LinkMovementMethod
 import android.view.*
-import androidx.constraintlayout.widget.ConstraintSet
 import com.peterlaurence.trekme.R
 import com.peterlaurence.trekme.core.mapsource.MapSource
 import com.peterlaurence.trekme.core.mapsource.MapSourceBundle
