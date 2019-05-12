@@ -345,7 +345,7 @@ class MapViewFragment : Fragment(), ProjectionTask.ProjectionUpdateLister,
         val map = MapProvider.getCurrentMap()
         if (map != null) {
             if (mMap != null && mMap!!.equals(map)) {
-                // logic to detect if calibration changed - simplify this
+                // TODO: logic to detect if calibration changed - simplify this
 //                val newBounds = map.mapBounds
 //
 //                if (::mTileView.isInitialized) {
@@ -358,26 +358,27 @@ class MapViewFragment : Fragment(), ProjectionTask.ProjectionUpdateLister,
                 /* The map changed */
                 setMap(map)
                 inMapRecordingViewModel.reload()
-//                updateLayers()
+                updateLayers()
             }
         }
     }
 
-//    private fun updateLayers() {
-//        mMap?.let { map ->
-//            /* Update the marker layer */
+    private fun updateLayers() {
+        mMap?.let { map ->
+            // TODO: adapt layers
+            /* Update the marker layer */
 //            markerLayer.init(map, mTileView)
-//
-//            /* Update the route layer */
-//            routeLayer.init(map, mTileView)
-//
-//            /* Update the distance layer */
+
+            /* Update the route layer */
+            routeLayer.init(map, handlerTileView)
+
+            /* Update the distance layer */
 //            distanceLayer.init(map, mTileView)
-//
-//            /* Update the landmark layer */
+
+            /* Update the landmark layer */
 //            landmarkLayer.init(map, mTileView)
-//        }
-//    }
+        }
+    }
 
     override fun onStop() {
         job.cancel()
@@ -443,6 +444,7 @@ class MapViewFragment : Fragment(), ProjectionTask.ProjectionUpdateLister,
      * @param y the projected Y coordinate, or latitude if there is no [Projection]
      */
     private fun updatePosition(x: Double, y: Double) {
+        // TODO: implement position update
 //        mTileView.moveMarker(positionMarker, x, y)
         landmarkLayer.onPositionUpdate(x, y)
 
@@ -460,6 +462,7 @@ class MapViewFragment : Fragment(), ProjectionTask.ProjectionUpdateLister,
         /* The tileView can have only one MarkerTapListener.
          * It dispatches the tap event to child layers.
          */
+        // TODO: implement dispatch of touch event
 //        mTileView.setMarkerTapListener { view: View, x: Int, y: Int ->
 //            markerLayer.onMarkerTap(view, x, y)
 //            landmarkLayer.onMarkerTap(view, x, y)
@@ -494,7 +497,10 @@ class MapViewFragment : Fragment(), ProjectionTask.ProjectionUpdateLister,
             map.tileStreamProvider?.getTileStream(row, col, o as Int)
         }
 
-        /* DetailLevel definition */
+        /* DetailLevel definition.
+         * Since TileView requires the higher levels to be added first, the list of levels is
+         * looped in reverse order.
+         */
         levelList.reversed().forEachIndexed { index, _ ->
             builder.defineZoomLevel(index, levelList.size - 1 - index)
         }
@@ -517,14 +523,7 @@ class MapViewFragment : Fragment(), ProjectionTask.ProjectionUpdateLister,
         handlerTileView = HandlerTileView(builder, coordinatePlugin)
         builder.build()
 
-//        /* Lowest scale */
-//        val minScale = 1 / Math.pow(2.0, (levelList.size - 1).toDouble()).toFloat()
-
-        /* Scale limits */
-//        tileView.setScaleLimits(0f, 2f)
-
-        /* Starting scale */
-//        tileView.scale = 1f
+        // TODO: set mex scale here. It should be only setMaxScale(2f)
 
         /* Remove the existing TileView, then add the new one */
         removeCurrentTileView()
@@ -532,6 +531,7 @@ class MapViewFragment : Fragment(), ProjectionTask.ProjectionUpdateLister,
     }
 
     private fun centerOnPosition() {
+        // TODO: implement his
 //        if (::mTileView.isInitialized) {
 //            mTileView.moveToMarker(positionMarker, true)
 //        }

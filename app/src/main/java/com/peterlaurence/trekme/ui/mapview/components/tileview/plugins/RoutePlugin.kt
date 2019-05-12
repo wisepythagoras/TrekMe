@@ -22,9 +22,12 @@ class RoutePlugin: TileView.Plugin, TileView.CanvasDecorator, TileView.Listener 
     private lateinit var routeList: List<RouteGson.Route>
     private var scale = 1f
     private lateinit var defaultPaint: Paint
+    private lateinit var tileView: TileView
 
     override fun install(tileView: TileView) {
+        this.tileView = tileView
         tileView.addCanvasDecorator(this)
+        tileView.addListener(this)
 
         val metrics = tileView.resources.displayMetrics
         val mStrokeWidthDefault = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, DEFAULT_STROKE_WIDTH_DP.toFloat(), metrics)
@@ -44,10 +47,13 @@ class RoutePlugin: TileView.Plugin, TileView.CanvasDecorator, TileView.Listener 
             for (route in routeList) {
                 if (route.data is DrawablePath) {
                     val drawablePath = route.data as DrawablePath
-                    val paint = drawablePath.paint ?: defaultPaint
+                    if (drawablePath.paint == null) {
+                        drawablePath.paint = Paint(defaultPaint)
+                    }
+                    val paint = drawablePath.paint!!
 
                     if (route.visible) {
-                        paint.strokeWidth = drawablePath.width / scale
+                        paint.strokeWidth = drawablePath.width ?: defaultPaint.strokeWidth / scale
                         canvas.drawLines(drawablePath.path, paint)
                     }
                 }
@@ -63,6 +69,10 @@ class RoutePlugin: TileView.Plugin, TileView.CanvasDecorator, TileView.Listener 
         this.routeList = routeList
     }
 
+    fun redraw() {
+        tileView.invalidate()
+    }
+
     /**
      * Set the paint's color. Note that the color is an int containing alpha
      * as well as r,g,b. This 32bit value is not premultiplied, meaning that
@@ -75,5 +85,5 @@ class RoutePlugin: TileView.Plugin, TileView.CanvasDecorator, TileView.Listener 
         defaultPaint.color = color
     }
 
-    class DrawablePath(val path: FloatArray, val width: Float, val paint: Paint? = null)
+    class DrawablePath(val path: FloatArray, val width: Float? = null, var paint: Paint? = null)
 }

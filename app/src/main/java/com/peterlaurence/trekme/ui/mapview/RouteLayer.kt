@@ -5,9 +5,9 @@ import com.peterlaurence.trekme.core.map.Map
 import com.peterlaurence.trekme.core.map.gson.MarkerGson
 import com.peterlaurence.trekme.core.map.gson.RouteGson
 import com.peterlaurence.trekme.core.map.maploader.MapLoader.getRoutesForMap
-import com.peterlaurence.trekme.ui.mapview.components.PathView
+import com.peterlaurence.trekme.ui.mapview.components.tileview.HandlerTileView
+import com.peterlaurence.trekme.ui.mapview.components.tileview.plugins.RoutePlugin
 import com.peterlaurence.trekme.ui.mapview.components.tracksmanage.TracksManageFragment
-import com.qozix.tileview.TileView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -26,7 +26,7 @@ import kotlinx.coroutines.launch
 class RouteLayer(private val coroutineScope: CoroutineScope) :
         TracksManageFragment.TrackChangeListener,
         CoroutineScope by coroutineScope {
-    private lateinit var mTileView: TileViewExtended
+    private lateinit var handlerTileView: HandlerTileView
     private lateinit var map: Map
 
     private val TAG = "RouteLayer"
@@ -45,16 +45,15 @@ class RouteLayer(private val coroutineScope: CoroutineScope) :
     }
 
     override fun onTrackVisibilityChanged() {
-        val pathView = mTileView.pathView
-        pathView?.invalidate()
+        handlerTileView.routeChanged()
     }
 
     /**
      * This must be called when the [MapViewFragment] is ready to update its UI.
      */
-    fun init(map: Map, tileView: TileView) {
+    fun init(map: Map, handlerTileView: HandlerTileView) {
         this.map = map
-        setTileView(tileView as TileViewExtended)
+        this.handlerTileView = handlerTileView
 
         if (this.map.areRoutesDefined()) {
             drawRoutes()
@@ -83,21 +82,17 @@ class RouteLayer(private val coroutineScope: CoroutineScope) :
         /* Display all routes */
         map.routes?.let { routes ->
             if (routes.isNotEmpty()) {
-                drawRoutes(routes, mTileView) {
-                    mTileView.drawRoutes(this)
+                drawRoutes(routes, handlerTileView) {
+                    handlerTileView.setRoutes(this)
                 }
             }
         }
     }
 
     private fun drawLiveRouteCompletely(liveRoute: RouteGson.Route) {
-        drawRoutes(listOf(liveRoute), mTileView) {
-            mTileView.drawLiveRoute(this)
+        drawRoutes(listOf(liveRoute), handlerTileView) {
+            handlerTileView.setLiveRoute(this)
         }
-    }
-
-    private fun setTileView(tileView: TileViewExtended) {
-        mTileView = tileView
     }
 
     /**
@@ -115,14 +110,14 @@ class RouteLayer(private val coroutineScope: CoroutineScope) :
      *                  ------------------
      */
     private fun CoroutineScope.drawRoutes(routeList: List<RouteGson.Route>,
-                                          tileView: TileViewExtended,
+                                          handlerTileView: HandlerTileView,
                                           action: List<RouteGson.Route>.() -> Unit) = launch {
 
         val routes = Channel<RouteGson.Route>()
         val paths = Channel<Pair<RouteGson.Route, FloatArray>>()
 
         repeat(2) {
-            producePath(routes, paths, tileView)
+            producePath(routes, paths, handlerTileView)
         }
         pathProcessor(paths, action)
 
@@ -136,7 +131,7 @@ class RouteLayer(private val coroutineScope: CoroutineScope) :
         val routesToDraw = mutableListOf<RouteGson.Route>()
         for ((route, lines) in paths) {
             /* Set the route data */
-            val drawablePath = PathView.DrawablePath(lines, null)
+            val drawablePath = RoutePlugin.DrawablePath(lines)
             route.apply {
                 data = drawablePath
             }
@@ -147,15 +142,15 @@ class RouteLayer(private val coroutineScope: CoroutineScope) :
 
     /**
      * Each [RouteGson.Route] of a [Map] needs to provide data in a format that the
-     * [TileView] understands.
+     * [HandlerTileView] understands.
      * This is done off UI thread.
      */
     private fun CoroutineScope.producePath(routes: ReceiveChannel<RouteGson.Route>,
                                            paths: SendChannel<Pair<RouteGson.Route, FloatArray>>,
-                                           tileView: TileViewExtended) = launch(Dispatchers.Default) {
+                                           handlerTileView: HandlerTileView) = launch(Dispatchers.Default) {
         for (route in routes) {
             try {
-                val lines = route.toPath(tileView) ?: continue
+                val lines = route.toPath(handlerTileView) ?: continue
                 paths.send(Pair(route, lines))
             } catch (e: Exception) {
                 // ignore and continue the loop
@@ -167,7 +162,7 @@ class RouteLayer(private val coroutineScope: CoroutineScope) :
      * Convert a [RouteGson.Route] to a [FloatArray] which is the drawable data structure expected
      * by the view that will represent it.
      */
-    private fun RouteGson.Route.toPath(tileView: TileViewExtended): FloatArray? {
+    private fun RouteGson.Route.toPath(handlerTileView: HandlerTileView): FloatArray? {
         val markerList = route_markers ?: listOf()
         /* If there is only one marker, the path has no sense */
         if (markerList.size < 2) return null
@@ -181,13 +176,13 @@ class RouteLayer(private val coroutineScope: CoroutineScope) :
             val relativeX = marker.getRelativeX(map)
             val relativeY = marker.getRelativeY(map)
             if (init) {
-                lines[i] = tileView.coordinateTranslater.translateX(relativeX).toFloat()
-                lines[i + 1] = tileView.coordinateTranslater.translateY(relativeY).toFloat()
+                lines[i] = handlerTileView.translateRelativeX(relativeX).toFloat()
+                lines[i + 1] = handlerTileView.translateRelativeY(relativeY).toFloat()
                 init = false
                 i += 2
             } else {
-                lines[i] = tileView.coordinateTranslater.translateX(relativeX).toFloat()
-                lines[i + 1] = tileView.coordinateTranslater.translateY(relativeY).toFloat()
+                lines[i] = handlerTileView.translateRelativeX(relativeX).toFloat()
+                lines[i + 1] = handlerTileView.translateRelativeY(relativeY).toFloat()
                 if (i + 2 >= size) break
                 lines[i + 2] = lines[i]
                 lines[i + 3] = lines[i + 1]

@@ -19,11 +19,23 @@ class HandlerTileView(builder: TileView.Builder, val coordinatePlugin: Coordinat
         routePlugin.setRoutes(routeList)
     }
 
-    fun setLiveRoute(route: RouteGson.Route) {
-        liveRoutePlugin.setRoutes(listOf(route))
+    fun setLiveRoute(routeList: List<RouteGson.Route>) {
+        liveRoutePlugin.setRoutes(routeList)
     }
 
     fun setLiveRouteColor(color: Int) {
         liveRoutePlugin.setColor(color)
+    }
+
+    fun routeChanged() {
+        routePlugin.redraw()
+    }
+
+    fun translateRelativeX(relativeX: Double): Int {
+        return coordinatePlugin.translateRelativeX(relativeX)
+    }
+
+    fun translateRelativeY(relativeY: Double): Int {
+        return coordinatePlugin.translateRelativeY(relativeY)
     }
 }
