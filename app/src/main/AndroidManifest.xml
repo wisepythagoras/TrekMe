@@ -32,6 +32,105 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".util.gpx.GpxReceiveActivity"
+            android:label="@string/app_name"
+            android:launchMode="singleTop"
+            android:theme="@style/AppTheme">
+            <!-- Gpx intent-filter ; Mime type set -->
+            <intent-filter>
+
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="file" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:scheme="content" />
+
+                <!-- Valid mime types -->
+                <data android:mimeType="application/vnd.google-earth.kml+xml" />
+                <data android:mimeType="application/vnd.google-earth.kmz" />
+                <data android:mimeType="application/gpx+xml" />
+
+                <!-- Invalid mime types used by some bad software -->
+                <data android:mimeType="application/kml" />
+                <data android:mimeType="application/kmz" />
+                <data android:mimeType="application/gpx" />
+
+                <data android:mimeType="application/kml+xml" />
+                <data android:mimeType="application/kmz+xml" />
+
+                <data android:mimeType="application/vnd.google-earth.kml" />
+                <data android:mimeType="application/vnd.google-earth.gpx" />
+                <data android:mimeType="application/vnd.google-earth.kmz+xml" />
+                <data android:mimeType="application/vnd.google-earth.gpx+xml" />
+
+                <data android:mimeType="text/kml" />
+                <data android:mimeType="text/kmz" />
+                <data android:mimeType="text/gpx" />
+
+                <data android:mimeType="text/kml+xml" />
+                <data android:mimeType="text/kmz+xml" />
+                <data android:mimeType="text/gpx+xml" />
+
+                <data android:mimeType="text/xml+kml" />
+                <data android:mimeType="text/xml+kmz" />
+                <data android:mimeType="text/xml+gpx" />
+
+            </intent-filter>
+
+            <!-- Gpx intent-filter ; Mime type not set but valid extensions-->
+            <intent-filter>
+
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="file" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:scheme="content" />
+
+                <data android:host="*" />
+
+                <data android:pathPattern="/.*\\.gpx" />
+
+            </intent-filter>
+
+            <!-- Gpx intent-filter ; Invalid mime type but valid extensions -->
+            <intent-filter>
+
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="file" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:scheme="content" />
+
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern="/.*\\.gpx" />
+            </intent-filter>
+
+            <!-- Gpx intent-filter ; Specific case of visugpx.com which doesn't specify mimeType nor extension -->
+            <intent-filter>
+
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="https" />
+                <data android:host="www.visugpx.com" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name="com.peterlaurence.trekme.service.LocationService"
             android:enabled="true"

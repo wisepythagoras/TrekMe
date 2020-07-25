@@ -247,6 +247,16 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         }
     }
 
+    override fun onNewIntent(intent: Intent?) {
+        // TODO: this is how GpxReceiveActivity gives its Intent, in the case there was a running instance of TrekMe
+        // Otherwise, we should read the intent frm onCreate
+        val data = intent?.data
+        println("URI : ")
+        println(data)
+
+        super.onNewIntent(intent)
+    }
+
     /**
      * If the side menu is opened, just close it.
      * Otherwise, if the navigation component reports that there's no previous destination, display
