@@ -31,13 +31,19 @@ sealed class OsmLayer(override val id: String, override val wmtsName: String) : 
 object WorldTopoMap : OsmLayer(osmTopo, "World_Topo_Map")
 object WorldStreetMap : OsmLayer(osmStreet, "World_Street_Map")
 object OpenTopoMap : OsmLayer(openTopoMap, "OpenTopoMap")
+object CartoLight : OsmLayer(cartoLight, "CartoDB Positron")
+object OSMHotMap : OsmLayer(osmHotMap, "OSM Hot")
+object ESRIWorldImagery : OsmLayer(esriWorldImagery, "ESRI World Imagery")
 
 const val osmTopo = "osmTopo"
 const val osmStreet = "osmStreet"
 const val openTopoMap = "openTopoMap"
+const val cartoLight = "cartoLight"
+const val osmHotMap = "osmHotMap"
+const val esriWorldImagery = "esriWorldImagery"
 
 /* All supported OSM layers */
-val osmLayers: List<OsmLayer> = listOf(WorldStreetMap, WorldTopoMap, OpenTopoMap)
+val osmLayers: List<OsmLayer> = listOf(WorldStreetMap, WorldTopoMap, OpenTopoMap, CartoLight, OSMHotMap, ESRIWorldImagery)
 
 fun getLayer(id: String): Layer? {
     return when (id) {
@@ -48,6 +54,9 @@ fun getLayer(id: String): Layer? {
         osmTopo -> WorldTopoMap
         osmStreet -> WorldStreetMap
         openTopoMap -> OpenTopoMap
+        cartoLight -> CartoLight
+        osmHotMap -> OSMHotMap
+        esriWorldImagery -> ESRIWorldImagery
         else -> null
     }
 }

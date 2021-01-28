@@ -1,8 +1,6 @@
 package com.peterlaurence.trekme.core.providers.urltilebuilder
 
-import com.peterlaurence.trekme.core.providers.layers.openTopoMap
-import com.peterlaurence.trekme.core.providers.layers.osmStreet
-import com.peterlaurence.trekme.core.providers.layers.osmTopo
+import com.peterlaurence.trekme.core.providers.layers.*
 
 /**
  * For OSM, using https://tile.openstreetmap.org/
@@ -23,6 +21,15 @@ class UrlTileBuilderOSM(private val layerId: String) : UrlTileBuilder {
                 val server = listOf("a", "b", "c").random()
                 "https://$server.tile.opentopomap.org/$level/$col/$row.png"
             }
+            cartoLight -> {
+                val server = listOf("a", "b", "c").random()
+                "https://$server.basemaps.cartocdn.com/light_all/$level/$col/$row.png"
+            }
+            osmHotMap -> {
+                val server = listOf("a", "b", "c").random()
+                "https://$server.tile.openstreetmap.fr/hot/$level/$col/$row.png"
+            }
+            esriWorldImagery -> "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/$level/$row/$col"
             else -> "https://tile.openstreetmap.org/$level/$col/$row.png"
         }
     }

@@ -120,7 +120,10 @@ class GoogleMapWmtsViewFragment : Fragment() {
             ignSatellite to R.string.layer_ign_satellite,
             osmTopo to R.string.layer_osm_topo,
             osmStreet to R.string.layer_osm_street,
-            openTopoMap to R.string.layer_osm_opentopo
+            openTopoMap to R.string.layer_osm_opentopo,
+            cartoLight to R.string.layer_osm_cartolight,
+            osmHotMap to R.string.layer_osm_osmhot,
+            esriWorldImagery to R.string.layer_osm_esriworld
     )
 
     private var placesAdapter: PlacesAdapter? = null
