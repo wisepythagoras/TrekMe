@@ -4,18 +4,20 @@ package com.peterlaurence.trekme.repositories.recording
 
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.lifecycleScope
-import com.peterlaurence.trekme.core.track.DistanceCalculator
+import com.peterlaurence.trekme.core.geotools.deltaTwoPoints
 import com.peterlaurence.trekme.repositories.ign.IgnApiRepository
+import com.peterlaurence.trekme.util.chunk
+import com.peterlaurence.trekme.util.gpx.model.ElevationSource
 import com.peterlaurence.trekme.util.gpx.model.Gpx
 import com.peterlaurence.trekme.util.gpx.model.TrackPoint
 import com.peterlaurence.trekme.util.performRequest
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.*
 import kotlinx.serialization.Serializable
 import okhttp3.OkHttpClient
 import java.net.InetAddress
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Generates elevation graph data, as state of the exposed [elevationRepoState]. Other states are:
@@ -36,116 +38,141 @@ class ElevationRepository(
     val elevationRepoState: StateFlow<ElevationState> = _elevationRepoState.asStateFlow()
 
     private var lastGpxId: Int? = null
-    private var lastTargetWidth: Int? = null
-    private val correctionStore = hashMapOf<Int, Double>()
     private var job: Job? = null
+    private val sampling = 20
 
     private val primaryScope = ProcessLifecycleOwner.get().lifecycleScope
+    private val client = OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .cache(null)
+            .build()
 
     /**
-     * Computes elevation data from the given [GpxForElevation] and [targetWidth], and updates the
-     * exposed [elevationRepoState].
+     * Computes elevation data from the given [GpxForElevation] and updates the exposed
+     * [elevationRepoState].
      * When [gpxData] is null, the state is set to [Calculating]. Otherwise, the id of [gpxData] is
      * used to decide whether to cancel the ongoing work or not.
      *
      * @param gpxData The data to work on.
-     * @param targetWidth The actual amount of pixels in horizontal dimension. If the tracks has too
-     * many points, it will be sub-sampled.
      */
-    fun update(gpxData: GpxForElevation?, targetWidth: Int) {
+    fun update(gpxData: GpxForElevation?) {
         if (gpxData == null) {
             primaryScope.launch {
                 _elevationRepoState.emit(Calculating)
             }
             return
         }
-        val (gpx, id) = gpxData
-        if (id != lastGpxId || targetWidth != lastTargetWidth
-                || _elevationRepoState.value is NoNetwork
-                || _elevationRepoState.value is ElevationCorrectionError) {
+        val gpx = gpxData.gpx
+        val id = gpxData.id
+        if (id != lastGpxId || _elevationRepoState.value is NoNetwork || _elevationRepoState.value is ElevationCorrectionError) {
             job?.cancel()
             job = primaryScope.launch {
                 _elevationRepoState.emit(Calculating)
-                val data = gpxToElevationData(gpx, id, targetWidth)
-                _elevationRepoState.emit(data)
+
+                val apiStatus = checkElevationRestApi()
+                if (apiStatus.restApiOk && apiStatus.restApiOk) {
+                    val (realElevations, trusted) = getRealElevations(gpx)
+
+                    if (realElevations == null) {
+                        _elevationRepoState.emit(ElevationCorrectionError)
+                        return@launch
+                    }
+
+                    val data = makeElevationData(gpx, id, realElevations, trusted)
+                    _elevationRepoState.emit(data)
+                } else {
+                    _elevationRepoState.emit(NoNetwork(apiStatus.restApiOk))
+                }
             }
 
             /* Avoid keeping reference on data */
             job?.invokeOnCompletion {
                 job = null
             }
-            lastTargetWidth = targetWidth
             lastGpxId = id
         }
     }
 
-    private suspend fun gpxToElevationData(gpx: Gpx, id: Int, targetWidth: Int): ElevationState = withContext(dispatcher) {
-        var minElePt: TrackPoint? = null
-        var maxElePt: TrackPoint? = null
-        val distanceCalculator = DistanceCalculator()
-        val points = gpx.tracks.firstOrNull()?.trackSegments?.firstOrNull()?.trackPoints?.mapNotNull { pt ->
-            distanceCalculator.addPoint(pt.latitude, pt.longitude, pt.elevation)
-            val newEle = pt.elevation
-            if (newEle != null) {
-                if (minElePt == null) minElePt = pt
-                minElePt?.also {
-                    val curMin = it.elevation
-                    if (curMin != null && newEle < curMin) minElePt = pt
-                }
-                if (maxElePt == null) maxElePt = pt
-                maxElePt?.also {
-                    val curMax = it.elevation
-                    if (curMax != null && newEle > curMax) maxElePt = pt
-                }
-            }
-            if (newEle != null) ElePoint(distanceCalculator.distance, newEle) else null
-        }
-
-        val minEle_ = minElePt?.elevation
-        val maxEle_ = maxElePt?.elevation
-
-        if (points != null && minEle_ != null && maxEle_ != null) {
-            /* First, check if we already have the correction in the store */
-            val corStored = correctionStore[id]
-            var restApiOk = false
-            var error = false
-            if (corStored == null) {
-                /* Otherwise, check for internet connectivity and compute the correction */
-                val apiStatus = checkElevationRestApi()
-                restApiOk = if (apiStatus.internetOk) apiStatus.restApiOk else true
-                runCatching {
-                    if (apiStatus.internetOk && apiStatus.restApiOk) {
-                        correctionStore[id] = computeCorrection(minElePt, minEle_, maxElePt, maxEle_)
+    /**
+     * Get real elevations every [sampling]m. Returns null when an error occurred which would make the returned
+     * list inconsistent (we shall not mix real elevations with original elevations from the GPS).
+     */
+    private suspend fun getRealElevations(gpx: Gpx): PayloadInfo = withContext(dispatcher) {
+        val pointsFlow = flow {
+            var previousPt: TrackPoint? = null
+            val trackPoints = gpx.tracks.firstOrNull()?.trackSegments?.firstOrNull()?.trackPoints
+            trackPoints?.mapIndexed { index, pt ->
+                previousPt?.also { prev ->
+                    val d = deltaTwoPoints(prev.latitude, prev.longitude, pt.latitude, pt.longitude)
+                    if (d > sampling || index == trackPoints.lastIndex) {
+                        emit(PointIndexed(index, pt.latitude, pt.longitude, pt.elevation ?: 0.0))
                     }
-                }.onFailure {
-                    error = true
-                }
+                } ?: suspend {
+                    previousPt = pt
+                    emit(PointIndexed(0, pt.latitude, pt.longitude, pt.elevation ?: 0.0))
+                }()
             }
-            val cor = correctionStore[id]
-                    ?: return@withContext if (error) {
-                        ElevationCorrectionError
-                    } else NoNetwork(restApiOk)
-            val subSampled = points.subSample(targetWidth)
-            val corrected = subSampled.map {
-                it.copy(elevation = it.elevation + cor)
-            }
-            ElevationData(corrected, minEle_ + cor, maxEle_ + cor)
-        } else {
-            ElevationData(listOf(), 0.0, 0.0)
         }
+
+        val isTrusted = AtomicBoolean(false)
+        val payload = runCatching {
+            pointsFlow.chunk(40).buffer(8).flowOn(dispatcher).map { pts ->
+                flow {
+                    /* If we fail to fetch elevation for one chunk, stop the whole flow */
+                    val points = when (val eleResult = getElevations(
+                            pts.map { it.lat }, pts.map { it.lon })
+                    ) {
+                        Error -> throw Exception("Missing data")
+                        NonTrusted -> {
+                            isTrusted.set(false)
+                            pts
+                        }
+                        is TrustedElevations -> eleResult.elevations.zip(pts).map { (ele, pt) ->
+                            PointIndexed(pt.index, pt.lat, pt.lon, ele)
+                        }
+                    }
+                    emit(points)
+                }
+            }.flattenMerge(8).flowOn(ioDispatcher).toList().flatten()
+        }.getOrNull()
+
+        PayloadInfo(payload, isTrusted.get())
     }
 
-    private suspend fun computeCorrection(pt1: TrackPoint?, ele1: Double, pt2: TrackPoint?, ele2: Double): Double {
-        return if (pt1 != null && pt2 != null) {
-            val realElevations = getElevations(listOf(pt1, pt2))
-            if (realElevations != null && realElevations.isNotEmpty()) {
-                realElevations.zip(listOf(ele1, ele2)).let {
-                    it.sumByDouble { p ->
-                        (p.first - p.second)
-                    } / it.size
-                }
-            } else 0.0
-        } else 0.0
+    /**
+     * Perform interpolation between each real elevations.
+     */
+    private fun makeElevationData(gpx: Gpx, id: Int, points: List<PointIndexed>, trusted: Boolean): ElevationState {
+        val eleSource = if (trusted) ElevationSource.IGN_RGE_ALTI else ElevationSource.GPS
+        /* Take into account the trivial case where there is one or no points */
+        if (points.size < 2) {
+            val ele = points.firstOrNull()?.ele ?: 0.0
+            return ElevationData(id, points.map { ElePoint(0.0, it.ele) }, ele, ele, eleSource, sampling)
+        }
+        val ptsSorted = points.sortedBy { it.index }.iterator()
+
+        var dist = 0.0
+        var previousRefPt = ptsSorted.next()
+        var nextRefPt = ptsSorted.next()
+        val interpolated = gpx.tracks.firstOrNull()?.trackSegments?.firstOrNull()?.trackPoints?.mapIndexed { index, pt ->
+            val ratio = (index - previousRefPt.index).toFloat() / (nextRefPt.index - previousRefPt.index)
+            val ele = previousRefPt.ele + ratio * (nextRefPt.ele - previousRefPt.ele)
+            val distDelta = deltaTwoPoints(previousRefPt.lat, previousRefPt.lon, previousRefPt.ele, pt.latitude, pt.longitude, ele)
+
+            if (index >= nextRefPt.index && ptsSorted.hasNext()) {
+                previousRefPt = nextRefPt
+                nextRefPt = ptsSorted.next()
+            }
+            dist += distDelta
+            ElePoint(dist, ele)
+        }
+
+        val minEle = points.minByOrNull { it.ele }?.ele ?: 0.0
+        val maxEle = points.maxByOrNull { it.ele }?.ele ?: 0.0
+
+        return ElevationData(id, interpolated ?: listOf(), minEle, maxEle, eleSource, sampling)
     }
 
     /**
@@ -184,22 +211,30 @@ class ElevationRepository(
         }
     }
 
-    private suspend fun getElevations(trkPoints: List<TrackPoint>): List<Double>? {
-        val client = OkHttpClient()
+    private suspend fun getElevations(latList: List<Double>, lonList: List<Double>): ElevationResult {
         val ignApi = ignApiRepository.getApi()
-        val longitudeList = trkPoints.joinToString(separator = "|") { "${it.longitude}" }
-        val latitudeList = trkPoints.joinToString(separator = "|") { "${it.latitude}" }
-        val url = "http://$elevationServiceHost/$ignApi/alti/rest/elevation.json?lon=$longitudeList&lat=$latitudeList&zonly=true"
+        val longitudeList = lonList.joinToString(separator = "|") { it.toString() }
+        val latitudeList = latList.joinToString(separator = "|") { it.toString() }
+        val url = "http://$elevationServiceHost/$ignApi/alti/rest/elevation.json?lon=$longitudeList&lat=$latitudeList"
         val req = ignApiRepository.requestBuilder.url(url).build()
-        return client.performRequest<ElevationsResponse>(req)?.elevations?.let {
-            if (it.contains(-99999.0)) trkPoints.mapNotNull { pt -> pt.elevation } else it
-        }
+        val eleList = client.performRequest<ElevationsResponse>(req)?.elevations?.map { it.z }
+                ?: return Error
+        return if (eleList.contains(-99999.0)) {
+            NonTrusted
+        } else TrustedElevations(eleList)
     }
 
     @Serializable
-    private data class ElevationsResponse(val elevations: List<Double>)
+    private data class ElevationsResponse(val elevations: List<EleIgnPt>)
+
+    @Serializable
+    private data class EleIgnPt(val lat: Double, val lon: Double, val z: Double, val acc: Double)
 
     private data class ApiStatus(val internetOk: Boolean = false, val restApiOk: Boolean = false)
+
+    private data class PointIndexed(val index: Int, val lat: Double, val lon: Double, val ele: Double)
+
+    private data class PayloadInfo(val pointIndexed: List<PointIndexed>?, val trusted: Boolean)
 }
 
 private const val elevationServiceHost = "wxs.ign.fr"
@@ -208,7 +243,8 @@ sealed class ElevationState
 object Calculating : ElevationState()
 data class NoNetwork(val restApiOk: Boolean) : ElevationState()
 object ElevationCorrectionError : ElevationState()
-data class ElevationData(val points: List<ElePoint> = listOf(), val eleMin: Double = 0.0, val eleMax: Double = 0.0) : ElevationState()
+data class ElevationData(val id: Int, val points: List<ElePoint> = listOf(), val eleMin: Double = 0.0, val eleMax: Double = 0.0,
+                            val elevationSource: ElevationSource, val sampling: Int) : ElevationState()
 
 /**
  * A point representing the elevation at a given distance from the departure.
@@ -217,3 +253,8 @@ data class ElevationData(val points: List<ElePoint> = listOf(), val eleMin: Doub
  * @param elevation altitude in meters
  */
 data class ElePoint(val dist: Double, val elevation: Double)
+
+private sealed class ElevationResult
+private object Error : ElevationResult()
+private object NonTrusted : ElevationResult()
+private data class TrustedElevations(val elevations: List<Double>) : ElevationResult()
