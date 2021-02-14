@@ -1,24 +1,29 @@
 package com.peterlaurence.trekme.viewmodel.record
 
-import androidx.hilt.lifecycle.ViewModelInject
+import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.peterlaurence.trekme.repositories.recording.ElevationData
-import com.peterlaurence.trekme.repositories.recording.ElevationRepository
-import com.peterlaurence.trekme.repositories.recording.GpxForElevation
-import com.peterlaurence.trekme.repositories.recording.GpxRepository
-import com.peterlaurence.trekme.util.gpx.model.ElevationSource
+import com.peterlaurence.trekme.R
+import com.peterlaurence.trekme.core.events.AppEventBus
+import com.peterlaurence.trekme.core.events.StandardMessage
+import com.peterlaurence.trekme.core.events.WarningMessage
+import com.peterlaurence.trekme.repositories.recording.*
 import com.peterlaurence.trekme.util.gpx.model.ElevationSourceInfo
 import com.peterlaurence.trekme.util.gpx.model.TrackSegment
 import com.peterlaurence.trekme.util.gpx.writeGpx
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import java.io.FileOutputStream
+import javax.inject.Inject
 
-class ElevationViewModel @ViewModelInject constructor(
+@HiltViewModel
+class ElevationViewModel @Inject constructor(
         private val repository: ElevationRepository,
-        private val gpxRepository: GpxRepository
+        private val gpxRepository: GpxRepository,
+        private val appEventBus: AppEventBus,
+        private val app: Application
 ) : ViewModel() {
     val elevationPoints = repository.elevationRepoState
 
@@ -29,13 +34,33 @@ class ElevationViewModel @ViewModelInject constructor(
                     is ElevationData -> {
                         val gpxForElevation = gpxRepository.gpxForElevation.replayCache.firstOrNull()
                         gpxForElevation?.also { gpxForEle ->
-                            if (gpxForEle.id == state.id && state.elevationSource == ElevationSource.IGN_RGE_ALTI) {
+                            if (gpxForEle.id == state.id && state.needsUpdate) {
                                 updateGpxFileWithTrustedElevations(gpxForEle, state)
                             }
                         }
                     }
                     else -> {
                     } // Nothing to do
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            repository.events.collect {
+                val ctx = app.applicationContext
+                when (it) {
+                    ElevationCorrectionErrorEvent -> {
+                        val msg = ctx.getString(R.string.elevation_correction_error)
+                        appEventBus.postMessage(StandardMessage(msg, showLong = true))
+                    }
+                    is NoNetworkEvent -> {
+                        val msg = if (!it.internetOk) {
+                            ctx.getString(R.string.network_required)
+                        } else {
+                            ctx.getString(R.string.elevation_service_down)
+                        }
+                        appEventBus.postMessage(WarningMessage(ctx.getString(R.string.warning_title), msg))
+                    }
                 }
             }
         }

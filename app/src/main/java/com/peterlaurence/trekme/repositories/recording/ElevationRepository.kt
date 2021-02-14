@@ -12,6 +12,7 @@ import com.peterlaurence.trekme.util.gpx.model.Gpx
 import com.peterlaurence.trekme.util.gpx.model.TrackPoint
 import com.peterlaurence.trekme.util.performRequest
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.Serializable
 import okhttp3.OkHttpClient
@@ -36,6 +37,9 @@ class ElevationRepository(
 ) {
     private val _elevationRepoState = MutableStateFlow<ElevationState>(Calculating)
     val elevationRepoState: StateFlow<ElevationState> = _elevationRepoState.asStateFlow()
+
+    private val _events = MutableSharedFlow<ElevationEvent>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    val events = _events.asSharedFlow()
 
     private var lastGpxId: Int? = null
     private var job: Job? = null
@@ -66,25 +70,13 @@ class ElevationRepository(
         }
         val gpx = gpxData.gpx
         val id = gpxData.id
-        if (id != lastGpxId || _elevationRepoState.value is NoNetwork || _elevationRepoState.value is ElevationCorrectionError) {
+        if (id != lastGpxId) {
             job?.cancel()
             job = primaryScope.launch {
                 _elevationRepoState.emit(Calculating)
-
-                val apiStatus = checkElevationRestApi()
-                if (apiStatus.restApiOk && apiStatus.restApiOk) {
-                    val (realElevations, trusted) = getRealElevations(gpx)
-
-                    if (realElevations == null) {
-                        _elevationRepoState.emit(ElevationCorrectionError)
-                        return@launch
-                    }
-
-                    val data = makeElevationData(gpx, id, realElevations, trusted)
-                    _elevationRepoState.emit(data)
-                } else {
-                    _elevationRepoState.emit(NoNetwork(apiStatus.restApiOk))
-                }
+                val (realElevations, eleSource, needsUpdate) = getRealElevations(gpx)
+                val data = makeElevationData(gpx, id, realElevations, eleSource, needsUpdate)
+                _elevationRepoState.emit(data)
             }
 
             /* Avoid keeping reference on data */
@@ -116,17 +108,25 @@ class ElevationRepository(
             }
         }
 
-        val isTrusted = AtomicBoolean(false)
-        val payload = runCatching {
+        val noError = AtomicBoolean(true)
+
+        suspend fun useApi() = runCatching {
             pointsFlow.chunk(40).buffer(8).flowOn(dispatcher).map { pts ->
                 flow {
                     /* If we fail to fetch elevation for one chunk, stop the whole flow */
                     val points = when (val eleResult = getElevations(
                             pts.map { it.lat }, pts.map { it.lon })
                     ) {
-                        Error -> throw Exception("Missing data")
+                        Error -> {
+                            val apiStatus = checkElevationRestApi()
+                            if (!apiStatus.internetOk || !apiStatus.restApiOk) {
+                                _events.tryEmit(NoNetworkEvent(apiStatus.internetOk, apiStatus.restApiOk))
+                            }
+                            /* Stop the flow */
+                            throw Exception()
+                        }
                         NonTrusted -> {
-                            isTrusted.set(false)
+                            noError.set(false)
                             pts
                         }
                         is TrustedElevations -> eleResult.elevations.zip(pts).map { (ele, pt) ->
@@ -138,18 +138,36 @@ class ElevationRepository(
             }.flattenMerge(8).flowOn(ioDispatcher).toList().flatten()
         }.getOrNull()
 
-        PayloadInfo(payload, isTrusted.get())
+        val trustedElevations = gpx.hasTrustedElevations()
+
+        var usedApi = false
+        val payload = if (trustedElevations) {
+            pointsFlow.toList()
+        } else useApi()?.also { usedApi = true } ?: pointsFlow.toList()
+
+        /* If the api was used without critical error, but the result isn't trusted, warn the user */
+        if (usedApi && !noError.get()) _events.tryEmit(ElevationCorrectionErrorEvent)
+
+        /* Needs update if it wasn't already trusted and there was no errors */
+        val needsUpdate = usedApi && !trustedElevations && noError.get()
+
+        val eleSource = if (needsUpdate) ElevationSource.IGN_RGE_ALTI else ElevationSource.GPS
+
+        PayloadInfo(payload, eleSource, needsUpdate)
+    }
+
+    private fun Gpx.hasTrustedElevations(): Boolean {
+        return metadata?.elevationSourceInfo?.elevationSource == ElevationSource.IGN_RGE_ALTI
     }
 
     /**
      * Perform interpolation between each real elevations.
      */
-    private fun makeElevationData(gpx: Gpx, id: Int, points: List<PointIndexed>, trusted: Boolean): ElevationState {
-        val eleSource = if (trusted) ElevationSource.IGN_RGE_ALTI else ElevationSource.GPS
+    private fun makeElevationData(gpx: Gpx, id: Int, points: List<PointIndexed>, eleSource: ElevationSource, needsUpdate: Boolean): ElevationState {
         /* Take into account the trivial case where there is one or no points */
         if (points.size < 2) {
             val ele = points.firstOrNull()?.ele ?: 0.0
-            return ElevationData(id, points.map { ElePoint(0.0, it.ele) }, ele, ele, eleSource, sampling)
+            return ElevationData(id, points.map { ElePoint(0.0, it.ele) }, ele, ele, eleSource, needsUpdate, sampling)
         }
         val ptsSorted = points.sortedBy { it.index }.iterator()
 
@@ -172,7 +190,8 @@ class ElevationRepository(
         val minEle = points.minByOrNull { it.ele }?.ele ?: 0.0
         val maxEle = points.maxByOrNull { it.ele }?.ele ?: 0.0
 
-        return ElevationData(id, interpolated ?: listOf(), minEle, maxEle, eleSource, sampling)
+        return ElevationData(id, interpolated
+                ?: listOf(), minEle, maxEle, eleSource, needsUpdate, sampling)
     }
 
     /**
@@ -212,7 +231,7 @@ class ElevationRepository(
     }
 
     private suspend fun getElevations(latList: List<Double>, lonList: List<Double>): ElevationResult {
-        val ignApi = ignApiRepository.getApi()
+        val ignApi = ignApiRepository.getApi() ?: return Error
         val longitudeList = lonList.joinToString(separator = "|") { it.toString() }
         val latitudeList = latList.joinToString(separator = "|") { it.toString() }
         val url = "http://$elevationServiceHost/$ignApi/alti/rest/elevation.json?lon=$longitudeList&lat=$latitudeList"
@@ -234,17 +253,19 @@ class ElevationRepository(
 
     private data class PointIndexed(val index: Int, val lat: Double, val lon: Double, val ele: Double)
 
-    private data class PayloadInfo(val pointIndexed: List<PointIndexed>?, val trusted: Boolean)
+    private data class PayloadInfo(val pointIndexed: List<PointIndexed>, val elevationSource: ElevationSource, val needsUpdate: Boolean)
 }
 
 private const val elevationServiceHost = "wxs.ign.fr"
 
 sealed class ElevationState
 object Calculating : ElevationState()
-data class NoNetwork(val restApiOk: Boolean) : ElevationState()
-object ElevationCorrectionError : ElevationState()
 data class ElevationData(val id: Int, val points: List<ElePoint> = listOf(), val eleMin: Double = 0.0, val eleMax: Double = 0.0,
-                            val elevationSource: ElevationSource, val sampling: Int) : ElevationState()
+                         val elevationSource: ElevationSource, val needsUpdate: Boolean, val sampling: Int) : ElevationState()
+
+sealed class ElevationEvent
+data class NoNetworkEvent(val internetOk: Boolean, val restApiOk: Boolean) : ElevationEvent()
+object ElevationCorrectionErrorEvent : ElevationEvent()
 
 /**
  * A point representing the elevation at a given distance from the departure.
