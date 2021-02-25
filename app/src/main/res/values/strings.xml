@@ -27,6 +27,7 @@
     <string name="storage_perm_denied">Please enable storage permission from settings</string>
     <string name="close_dialog">Close</string>
     <string name="understood_dialog">I understand</string>
+    <string name="delayed_button_desc">Start / Strop a GPX recording</string>
 
     <!-- GpxRecordService -->
     <string name="service_gpx_record_name" translatable="false">Gpx recording service</string>
@@ -224,6 +225,11 @@
         and gpx files are stored locally on your device.</string>
     <string name="recording_imported_success">Successfully imported in %1$d files</string>
     <string name="recording_imported_failure">Couldn\'t import %1$s</string>
+    <string name="recording_edit_name_desc">Edit recording name</string>
+    <string name="recording_import_desc">Import the recording into a map</string>
+    <string name="recording_share_desc">Share a recording</string>
+    <string name="recording_show_elevations_desc">Show the elevation profile</string>
+    <string name="recording_delete_desc">Delete a recording</string>
 
     <!-- Elevation fragment -->
     <string name="no_elevations">This GPX file contains no elevations. TrekMe can\'t show the elevation profile.</string>
@@ -234,6 +240,10 @@
     <string name="elevation_top_icon" translatable="false">Elevation top icon</string>
     <string name="elevation_bottom_icon" translatable="false">Elevation bottom icon</string>
     <string name="elevation_bottom_top_icon" translatable="false">Elevation bottom-top icon</string>
+    <string name="elevation_src_label">Elevation data accuracy</string>
+    <string name="elevation_src_gps">Elevation data comes from the GPS, with medium accuracy.</string>
+    <string name="elevation_src_ign_rge_alti">Elevation data comes from IGN\'s RGE Alti database, with great accuracy.</string>
+    <string name="elevation_src_unknown">Elevation data comes from an unknown source. If the source is the GPS, the accuracy is medium.</string>
 
     <!-- MapCreate fragment -->
     <string name="next_button">Next</string>
