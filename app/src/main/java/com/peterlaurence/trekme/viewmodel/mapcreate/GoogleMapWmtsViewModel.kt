@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.peterlaurence.trekme.core.backendApi.ordnanceSurveyApiUrl
 import com.peterlaurence.trekme.core.map.BoundingBox
 import com.peterlaurence.trekme.core.map.TileStreamProvider
 import com.peterlaurence.trekme.core.map.contains
@@ -16,8 +15,9 @@ import com.peterlaurence.trekme.core.providers.bitmap.*
 import com.peterlaurence.trekme.core.providers.layers.*
 import com.peterlaurence.trekme.core.providers.stream.TileStreamProviderOverlay
 import com.peterlaurence.trekme.core.providers.stream.createTileStreamProvider
+import com.peterlaurence.trekme.repositories.api.IgnApiRepository
+import com.peterlaurence.trekme.repositories.api.OrdnanceSurveyApiRepository
 import com.peterlaurence.trekme.repositories.download.DownloadRepository
-import com.peterlaurence.trekme.repositories.ign.IgnApiRepository
 import com.peterlaurence.trekme.repositories.mapcreate.LayerOverlayRepository
 import com.peterlaurence.trekme.repositories.mapcreate.LayerProperties
 import com.peterlaurence.trekme.service.DownloadService
@@ -45,11 +45,11 @@ class GoogleMapWmtsViewModel @Inject constructor(
         private val app: Application,
         private val downloadRepository: DownloadRepository,
         private val ignApiRepository: IgnApiRepository,
+        private val ordnanceSurveyApiRepository: OrdnanceSurveyApiRepository,
         private val layerOverlayRepository: LayerOverlayRepository
 ) : ViewModel() {
     private val defaultIgnLayer: IgnLayer = IgnClassic
     private val defaultOsmLayer: OsmLayer = WorldStreetMap
-    private var ordnanceSurveyApi: String? = null
 
     private val _wmtsSourceAccessibility = MutableStateFlow(true)
     val wmtsSourceAccessibility = _wmtsSourceAccessibility.asStateFlow()
@@ -151,19 +151,22 @@ class GoogleMapWmtsViewModel @Inject constructor(
         return layerOverlayRepository.getLayerProperties(wmtsSource)
     }
 
+    /**
+     * Creates the [TileStreamProvider] for the given source. If we couldn't fetch the API key (when
+     * we should have been able to do so), an [IllegalStateException] is thrown.
+     */
+    @Throws(IllegalStateException::class)
     suspend fun createTileStreamProvider(wmtsSource: WmtsSource): TileStreamProvider? {
         val mapSourceData = when (wmtsSource) {
             WmtsSource.IGN -> {
                 val layer = getPrimaryLayerForSource(wmtsSource)!!
                 val overlays = getOverlayLayersForSource(wmtsSource)
-                val ignApi = ignApiRepository.getApi()
-                IgnSourceData(ignApi ?: "", layer, overlays)
+                val ignApi = ignApiRepository.getApi() ?: throw IllegalStateException()
+                IgnSourceData(ignApi, layer, overlays)
             }
             WmtsSource.ORDNANCE_SURVEY -> {
-                if (ordnanceSurveyApi == null) {
-                    ordnanceSurveyApi = getApi(ordnanceSurveyApiUrl)
-                }
-                OrdnanceSurveyData(ordnanceSurveyApi ?: "")
+                val api = ordnanceSurveyApiRepository.getApi() ?: throw IllegalStateException()
+                OrdnanceSurveyData(api)
             }
             WmtsSource.OPEN_STREET_MAP -> {
                 val layer = getPrimaryLayerForSource(wmtsSource)!!

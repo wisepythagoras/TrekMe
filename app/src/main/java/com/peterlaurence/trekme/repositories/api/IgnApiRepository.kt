@@ -1,12 +1,16 @@
-package com.peterlaurence.trekme.repositories.ign
+package com.peterlaurence.trekme.repositories.api
 
 import com.peterlaurence.trekme.core.backendApi.backendApiServer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Request
 import java.net.URL
 
 
+/**
+ * Lazily fetch the API key for France IGN
+ */
 class IgnApiRepository {
     private var api: String? = null
 
@@ -15,7 +19,9 @@ class IgnApiRepository {
 
     suspend fun getApi(): String? {
         if (api == null) {
-            api = queryApi(ignApiUrl)
+            api = withTimeoutOrNull(3000) {
+                queryApi(ignApiUrl)
+            }
         }
         return api
     }
