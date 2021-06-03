@@ -93,6 +93,9 @@
 
     <string name="map_summary_category">Map</string>
     <string name="map_title">Name</string>
+    <string name="map_size_string">Size</string>
+    <string name="map_size_compute_string">Compute size</string>
+    <string name="map_size_computing">Computing..</string>
     <string name="map_save_string">Save</string>
     <string name="map_delete_question">Are you sure to delete this map?</string>
     <string name="cancel_dialog_string">Cancel</string>
@@ -113,6 +116,7 @@
     <string name="preference_numpoints_key" translatable="false">pref_points_number_preference</string>
     <string name="preference_map_title_key" translatable="false">pref_map_title_key</string>
     <string name="preference_calibration_button_key" translatable="false">pref_calib_btn_key</string>
+    <string name="preference_size_button_key" translatable="false">pref_size_map</string>
     <string name="preference_save_button_key" translatable="false">pref_save_map</string>
     <string name="calibration_enter_values">Enter values after choosing a calibration point</string>
     <string name="wgs84_switch">WGS84 lat/lng</string>
@@ -199,6 +203,7 @@
     <!-- Record GPX fragment -->
     <string name="control_card_title">Control</string>
     <string name="control_card_subtitle">Start or stop recording</string>
+    <string name="location_disabled_warning">Location is currently disabled. Please enable it on your device.</string>
     <string name="recordings_list_title">GPX recordings</string>
     <string name="recordings_menu_import">Import files</string>
     <string name="files_could_not_be_deleted">Some files could not be deleted</string>
@@ -347,6 +352,7 @@
     <string name="preference_change_scale_when_centering">Define scale when centering on position</string>
     <string name="preference_zoom_when_centered_key" translatable="false">pref_scale_zoom_when_centered</string>
     <string name="preference_zoom_when_centered">Zoom when centered</string>
+    <string name="preference_zoom_when_centered_compl">(current: %1$s)</string>
 
     <!-- WifiP2pFragment -->
     <string name="wifip2p_stop_btn">Stop</string>

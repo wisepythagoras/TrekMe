@@ -18,8 +18,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.channels.sendBlocking
+import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.flow.*
+import java.io.File
 import java.io.IOException
 import java.io.OutputStream
 import javax.inject.Inject
@@ -103,18 +104,18 @@ class MapSettingsViewModel @Inject constructor(
             override fun fileListAcquired() {}
 
             override fun onProgress(p: Int) {
-                offer(ZipProgressEvent(p, mapName, mapId))
+                trySend(ZipProgressEvent(p, mapName, mapId))
             }
 
             override fun onZipFinished() {
                 /* Use sendBlocking instead of offer to be sure not to lose those events */
-                sendBlocking(ZipFinishedEvent(mapId))
-                sendBlocking(ZipCloseEvent)
+                trySendBlocking(ZipFinishedEvent(mapId))
+                trySendBlocking(ZipCloseEvent)
                 channel.close()
             }
 
             override fun onZipError() {
-                sendBlocking(ZipError)
+                trySendBlocking(ZipError)
                 cancel()
             }
         }
@@ -132,7 +133,7 @@ class MapSettingsViewModel @Inject constructor(
     }
 
     fun setCalibrationPointsNumber(map: Map, numberStr: String?) {
-        when(numberStr) {
+        when (numberStr) {
             "2" -> map.calibrationMethod = MapLoader.CalibrationMethod.SIMPLE_2_POINTS
             "3" -> map.calibrationMethod = MapLoader.CalibrationMethod.CALIBRATION_3_POINTS
             "4" -> map.calibrationMethod = MapLoader.CalibrationMethod.CALIBRATION_4_POINTS
@@ -156,6 +157,17 @@ class MapSettingsViewModel @Inject constructor(
         viewModelScope.launch {
             mapLoader.saveMap(map)
         }
+    }
+
+    suspend fun computeMapSize(map: Map): Long? = withContext(Dispatchers.IO) {
+        runCatching {
+            val size = map.directory.walkTopDown().filter { it.isFile }.map { it.length() }.sum()
+            withContext(Dispatchers.Main) {
+                map.setSizeInBytes(size)
+                saveMapAsync(map)
+            }
+            size
+        }.getOrNull()
     }
 }
 

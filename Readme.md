@@ -314,6 +314,10 @@ From the "GPX Record" option menu, you get the following interface:
 
 The recording can be started or stopped from the control panel. When recording, the location service
 runs in the background. It continues even if TrekMe is stopped or paused.
+If you have Android 10 or above, you need to make sure that the location permission for TrekMe is set
+to "Allow all the time", and not just when using the app. Otherwise, some points won't be recorded 
+and straight lines will appear on the track.
+
 An indicator reports back the status of the location service. A panel shows the list of recordings.
 
 From there, when selecting a track, four buttons at the bottom-left enable you to :
@@ -402,7 +406,7 @@ Three rotation modes are available:
 In this mode, the map is rotated along with your device's orientation *if* you enable orientation
 display (while displaying a map, in the upper right menu > Show orientation).
 When orientation display is enabled, a small compass appears in the bottom right of the screen - the
-read side indicates the North. Whenever you like, you can disable orientation display. In this case, 
+red side indicates the North. Whenever you like, you can disable orientation display. In this case, 
 the map is aligned to the North and the compass disappears. Also note that in this mode, pressing the
 compass has no effect. An example:
 
@@ -449,7 +453,7 @@ storage. That folder shouldn't be a subfolder of the folder(s) used by TrekMe.
 
 A map is sometimes heavy and takes quite some time to download. When a friend also has TrekMe, it's
 possible send him/her one of your maps. This feature requires the Wifi to be enabled on the two devices,
-even if there is no router or hotspot in the vicinity - the sender directly send to the receiving
+even if there is no router or hotspot in the vicinity - the sender can directly send to the receiving
 device over Wifi. Make sure that the two devices stay relatively close to each other. Even if some
 loads have completed successfully with several meters between the two devices, experience has shown 
 that keeping the two devices close to each other lowers the risk of error.
@@ -458,7 +462,7 @@ Go ahead in the main menu > "Receive and send". There's a button to receive and 
 When you choose to receive, the device is awaiting for a connection with the sender. This step can
 take several minutes - please be patient. Meanwhile, the sender uses the send button and the map to send.
 
-When the connexion is established, the load starts and you can see the progression. If everything goes
+When the connection is established, the load starts and you can see the progression. If everything goes
 well, a gorgeous emoticon is shown. Otherwise, and especially if the load got interrupted, you're advised
 to start again (Wifi isn't 100% reliable).
 
