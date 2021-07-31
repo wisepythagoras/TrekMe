@@ -23,7 +23,7 @@
     <string name="calibration_projection_saved_ok">Projection changée</string>
     <string name="ok_dialog">OK</string>
     <string name="import_menu_title">Importer une carte</string>
-    <string name="import_from_folder_btn">Importer depuis un dossier</string>
+    <string name="import_folder_select_btn">Sélection du dossier d\'archives</string>
     <string name="extraction_lbl">Extraction</string>
     <string name="map_created_lbl">Création de la carte</string>
     <string name="map_manage_btn_string">Modifier</string>
@@ -180,10 +180,10 @@
     <string name="wifip2p_warning_wifi">Vous devez activer la Wifi pour profiter de cette fonctionnalité. La communican avec l\'autre appareil se fait directement en Wifi.</string>
     <string name="wifip2p_help_url">https://github.com/peterLaurence/TrekMe/blob/master/Readme.fr.md#partage-de-carte</string>
     <string name="mapview_measure_distance_on_track">Distance sur trace</string>
-    <string name="ign_buy_license_unknown">Imposible de vérifier le module</string>
+    <string name="module_check_unknown">Imposible de vérifier le module</string>
     <string name="preference_zoom_when_centered">Zoom quand centré</string>
     <string name="preference_change_scale_when_centering">Définir échelle quand centré</string>
-    <string name="import_title">Importer</string>
+    <string name="import_title">Importer depuis des archives</string>
     <string name="ordnance_survey_source_description">Carte de Grande-Bretagne</string>
     <string name="map_import_error">Erreur: le format de la carte n\'est pas reconnu.</string>
     <string name="storage_perm_denied">Veuillez activer la permission de stockage</string>
@@ -228,7 +228,7 @@
         ailleurs que sur votre appareil.</string>
     <string name="solution_title">Solution</string>
     <string name="service_download_already_running">Un téléchargement est déjà en cours. Veuillez attendre la fin du téléchargement avant d\'en lancer un autre.</string>
-    <string name="ign_license_check_pending">Vérification de du module…</string>
+    <string name="module_check_pending">Vérification du module…</string>
     <string name="track_visibility_btn">Visibilité de la trace</string>
     <string name="track_color_btn">Coleur de la trace</string>
     <string name="color_picker_title">Sélectionnez une couleur</string>
@@ -288,4 +288,35 @@
     <string name="map_size_string">Taille</string>
     <string name="map_size_compute_string">Calcul de la taille</string>
     <string name="map_size_computing">Calcul en cours..</string>
+    <string name="gps_plus_menu_title">GPS+</string>
+    <string name="previously_connected_bt_devices">APPAREILS CONNECTÉS PRÉCÉDEMMENT</string>
+    <string name="wifip2p_title">Partage de carte</string>
+    <string name="mapcreate_title">Création de carte</string>
+    <string name="recording_frgmt_title">Enregistrement GPX</string>
+    <string name="select_bt_devices_title">Sélection du GPS actif</string>
+    <string name="internal_gps">GPS interne</string>
+    <string name="connection_bt_lost_msg">Connection au GPS Bluetooth perdue, tentative de re-connection…</string>
+    <string name="gps_pro_pres_p1_title">Connectez votre GPS externe en Bluetooth</string>
+    <string name="gps_pro_pres_content">Si vous avez un GPS externe ayant la fonctionnalité bluetooth, vous pouvez le connecter à TrekMe et l\'utiliser à la place du GPS interne
+        de votre apparail.\nCertaines activités comme l\'aéronautique et la topographie professionnelle requièrent une meilleure précision et un taux de rafraîchissement
+        de la position supérieur à une fois par seconde (ce qui est la limite de ce que peut fournir le GPS interne des appareils Android).</string>
+    <string name="gps_pro_pres_p2_title">Appareils compatibles</string>
+    <string name="gps_pro_pres_ending">Cette liste n\'est pas exhaustive. Les GPS compatibles sont tous ceux émettant des trames NMEA 0183 en Bluetooth.</string>
+    <string name="bt_device_frgmt_title">Paramètres du GPS</string>
+    <string name="bt_device_frgmt_record">Générer un diagnostic du GPS</string>
+    <string name="bt_device_frgmt_diag_title">Diagnostic du GPS</string>
+    <string name="start_dialog_string">Lancer</string>
+    <string name="bt_device_frgmt_diag_content">Le diagnostic va enregistrer les émissions du GPS pendant 10s.\nC\'est utile quand la connexion avec TrekMe ne fonctionne
+        pas, car le diagnostic peut fournir des informations permettant de rendre TrekMe compatible avec votre GPS.\n\nIl vous sera proposé d\'enregistrer le diagnostic sur votre
+        appareil, sous forme de fichier texte. Ensuite, veuillez envoyer ce fichier à plr.devs@gmail.com afin que j\'étudie le cas particulier de votre GPS.</string>
+    <string name="bt_device_frgmt_record_running">Le diagnostic est en cours…</string>
+    <string name="bt_device_frgmt_record_done">Fichier sauvegardé</string>
+    <string name="bt_device_frgmt_record_error">Erreur pendant l\'écriture du fichier</string>
+    <string name="bt_device_settings_diagnostic_done">Diagnotic terminé. Reçu %1$d phrases.\nSauvegarder le ficher?</string>
+    <string name="bt_device_settings_diagnostic_empty">Le précédent diagnostic n\'a détecté aucune activité du GPS.</string>
+    <string name="searching_bt_devices">Recherche d\'appareils bluetooth</string>
+    <string name="diagnosis">diagnostic</string>
+    <string name="gps_pro_bt_disabled">Le bluetooth est désactivé</string>
+    <string name="gps_pro_bt_notsupported">Cet appareil n\'a pas la fonctionnalité bluetooth</string>
+    <string name="gps_pro_help_url">https://github.com/peterLaurence/TrekMe/blob/master/doc/gpspro/doc_fr.md</string>
 </resources>

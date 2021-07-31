@@ -6,7 +6,6 @@ import android.os.Parcelable
 import android.text.method.LinkMovementMethod
 import android.view.*
 import android.widget.ImageView
-import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SearchView
 import androidx.core.content.ContextCompat.getColor
 import androidx.fragment.app.Fragment
@@ -21,12 +20,12 @@ import com.peterlaurence.trekme.core.geocoding.GeoPlace
 import com.peterlaurence.trekme.core.map.TileStreamProvider
 import com.peterlaurence.trekme.core.mapsource.WmtsSource
 import com.peterlaurence.trekme.core.mapsource.WmtsSourceBundle
+import com.peterlaurence.trekme.core.model.Location
+import com.peterlaurence.trekme.core.model.LocationSource
 import com.peterlaurence.trekme.core.projection.MercatorProjection
 import com.peterlaurence.trekme.core.providers.bitmap.*
 import com.peterlaurence.trekme.core.providers.layers.*
 import com.peterlaurence.trekme.databinding.FragmentWmtsViewBinding
-import com.peterlaurence.trekme.repositories.location.Location
-import com.peterlaurence.trekme.repositories.location.LocationSource
 import com.peterlaurence.trekme.ui.mapcreate.dialogs.LayerSelectDialog
 import com.peterlaurence.trekme.ui.mapcreate.dialogs.WmtsLevelsDialog
 import com.peterlaurence.trekme.ui.mapcreate.dialogs.WmtsLevelsDialogIgn
@@ -188,10 +187,6 @@ class GoogleMapWmtsViewFragment : Fragment() {
     }
 
     override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
-        /* Hide the app title */
-        val actionBar = (activity as AppCompatActivity).supportActionBar
-        actionBar?.setDisplayShowTitleEnabled(false)
-
         /* Clear the existing action menu */
         menu.clear()
 

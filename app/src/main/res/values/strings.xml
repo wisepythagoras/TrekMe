@@ -11,6 +11,7 @@
     <string name="select_map_menu_title">My maps</string>
     <string name="create_menu_title">Create</string>
     <string name="record_menu_title">Gpx Record</string>
+    <string name="gps_plus_menu_title">GPS+</string>
     <string name="track_stats_menu_title">Recording stats</string>
     <string name="import_menu_title">Import a map</string>
     <string name="share_menu_title">Receive or send</string>
@@ -26,6 +27,8 @@
     <string name="storage_read_only">Your SD card is only accessible as read-only. This means we can\'t write to it and TrekMe won\'t be able to download maps or save changes.</string>
     <string name="storage_perm_denied">Please enable storage permission from settings</string>
     <string name="close_dialog">Close</string>
+    <string name="cancel_dialog_string">Cancel</string>
+    <string name="start_dialog_string">Start</string>
     <string name="understood_dialog">I understand</string>
     <string name="delayed_button_desc">Start / Strop a GPX recording</string>
 
@@ -98,7 +101,6 @@
     <string name="map_size_computing">Computing..</string>
     <string name="map_save_string">Save</string>
     <string name="map_delete_question">Are you sure to delete this map?</string>
-    <string name="cancel_dialog_string">Cancel</string>
 
     <string name="projection_none">None</string>
     <string name="wgs84_instead_of_projected">You entered WGS84 lat/lon instead of projected values</string>
@@ -127,8 +129,8 @@
     <string name="projected_y_short">N</string>
 
     <!-- MapImport fragment -->
-    <string name="import_title">Import</string>
-    <string name="import_from_folder_btn">Import from folder</string>
+    <string name="import_title">Import from archives</string>
+    <string name="import_folder_select_btn">Select archives folder</string>
     <string name="extraction_lbl">Extraction</string>
     <string name="map_created_lbl">Map creation</string>
     <string name="imported_new_map">Imported and created a new map</string>
@@ -201,6 +203,7 @@
     <string name="show_map_action">Show map</string>
 
     <!-- Record GPX fragment -->
+    <string name="recording_frgmt_title">GPX recording</string>
     <string name="control_card_title">Control</string>
     <string name="control_card_subtitle">Start or stop recording</string>
     <string name="location_disabled_warning">Location is currently disabled. Please enable it on your device.</string>
@@ -277,6 +280,7 @@
     <string name="place_outside_of_covered_area">The place is outside of the area covered by this map.</string>
 
     <!-- MapCreateFragment -->
+    <string name="mapcreate_title">Map creation</string>
     <string name="mapcreate_define_area">Choose area</string>
     <string name="mapcreate_define_layer">Choose layer</string>
     <string name="mapcreate_overlay_layers">Overlay layers</string>
@@ -290,9 +294,9 @@
     <string name="ign_license_explanation">You have a 7 days of free trial. You can cancel your subscription anytime in the
         Google Play > Subscriptions > TrekMe > Cancel.\nThe IGN module is valid for one year. It allows you to create maps
         without any restrictions.</string>
-    <string name="ign_license_check_pending">Checking module..</string>
+    <string name="module_check_pending">Checking module..</string>
     <string name="ign_buy_license_pending">Please wait a few minutes, payment is pending</string>
-    <string name="ign_buy_license_unknown">Unable to check your module</string>
+    <string name="module_check_unknown">Unable to check your module</string>
     <string name="buy_btn">Purchase</string>
     <string name="download">Download</string>
     <string name="download_confirm">Download started. See the status in your notifications.</string>
@@ -355,6 +359,7 @@
     <string name="preference_zoom_when_centered_compl">(current: %1$s)</string>
 
     <!-- WifiP2pFragment -->
+    <string name="wifip2p_title">Map sharing</string>
     <string name="wifip2p_stop_btn">Stop</string>
     <string name="wifip2p_rcv_btn">Receive</string>
     <string name="wifip2p_send_btn">Send</string>
@@ -382,4 +387,33 @@
         to any third parties.</string>
     <string name="thumb_up_button" translatable="false">Thumb-up button</string>
     <string name="thumb_down_button" translatable="false">Thumb-down button</string>
+
+    <!-- GpsPro UI -->
+    <string name="gps_pro_name" translatable="false">GPS Pro</string>
+    <string name="gps_pro_pres_p1_title">Connect your external GPS in Bluetooth</string>
+    <string name="gps_pro_help_url">https://github.com/peterLaurence/TrekMe/blob/master/doc/gpspro/doc.md</string>
+    <string name="gps_pro_pres_content">If you have an external GPS with bluetooth, you can connect it to TrekMe and use it instead of
+    the internal GPS of your device. This is especially useful when your activity (aeronautic, professional topography, ..) requires better
+    precision and updating your position at a higher frequency than every second.</string>
+    <string name="gps_pro_pres_p2_title">Compatible devices</string>
+    <string name="gps_pro_pres_ending">This list isn\'t exhaustive. All GPS emitting NMEA 0183 sentences over Bluetooth are supported.</string>
+    <string name="searching_bt_devices">Searching bluetooth devices</string>
+    <string name="gps_pro_bt_disabled">Bluetooth is disabled</string>
+    <string name="gps_pro_bt_notsupported">Bluetooth isn\'t supported on this device</string>
+    <string name="select_bt_devices_title">Select active GPS</string>
+    <string name="previously_connected_bt_devices">PREVIOUSLY CONNECTED DEVICES</string>
+    <string name="internal_gps">Internal GPS</string>
+    <string name="connection_bt_lost_msg">Bluetooth GPS connection lost. Will retry..</string>
+    <string name="bt_device_frgmt_title">Settings for device</string>
+    <string name="bt_device_frgmt_record">Generate GPS diagnosis</string>
+    <string name="diagnosis">diagnosis</string>
+    <string name="bt_device_frgmt_record_running">Diagnosis is running…</string>
+    <string name="bt_device_frgmt_record_done">File saved</string>
+    <string name="bt_device_frgmt_record_error">An error occurred while saving the file</string>
+    <string name="bt_device_frgmt_diag_title">GPS diagnosis</string>
+    <string name="bt_device_frgmt_diag_content">Your GPS emissions will be recorded for 10s.\nThis is useful when the connection with TrekMe isn\'t working
+    properly, as it contains information that will further help making TrekMe compatible with your GPS.\n\nYou\'ll be asked for saving the diagnosis on your
+    device. Then, please send it at plr.devs@gmail.com - I\'ll have a look and give you feedback.</string>
+    <string name="bt_device_settings_diagnostic_done">Diagnosis done. Received %1$d sentences.\nSave file?</string>
+    <string name="bt_device_settings_diagnostic_empty">The previous diagnosis didn\'t record any activity from the GPS.</string>
 </resources>

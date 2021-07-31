@@ -1,91 +1,85 @@
 package com.peterlaurence.trekme.repositories.location
 
-import android.Manifest
-import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Looper
-import androidx.core.app.ActivityCompat
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.lifecycleScope
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.LocationServices
+import com.peterlaurence.trekme.core.model.*
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.*
 
-interface LocationSource {
-    // TODO: change to SharedFlow when https://github.com/Kotlin/kotlinx.coroutines/issues/2408 is fixed
-    val locationFlow: Flow<Location>
-}
-
 /**
- * [latitude] and [longitude] are in decimal degrees.
- * [altitude] is in meters.
- * [speed] is in meters per second.
- * [time] is the UTC time in milliseconds since January 1, 1970
+ * This [LocationSource] uses two [LocationProducer]s. One called "internal" corresponds to
+ * the device's GPS antenna. The other called "external" corresponds to whatever external bluetooth
+ * or wifi connected GPS.
  */
-data class Location(val latitude: Double = 0.0, val longitude: Double = 0.0, val speed: Float = 0f,
-                    val altitude: Double = 0.0, val time: Long = 0)
-
-/**
- * A [LocationSource] which uses Google's fused location provider. It combines all possible sources
- * of location data.
- *
- * @author P.Laurence on 26/11/20
- */
-class GoogleLocationSource(private val applicationContext: Context) : LocationSource {
-    private val fusedLocationClient: FusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(applicationContext)
-    private val locationRequest = LocationRequest.create().apply {
-        interval = 2000
-        fastestInterval = 2000
-        priority = LocationRequest.PRIORITY_HIGH_ACCURACY
-    }
-    private val looper = Looper.getMainLooper()
-
+class LocationSourceImpl(
+        modeFlow: Flow<LocationProducerInfo>,
+        flowSelector: (LocationProducerInfo) -> Flow<Location>
+) : LocationSource {
     /**
-     * A conflated [SharedFlow] of [Location]s, with a replay of 1.
+     * A [SharedFlow] of [Location]s, with a replay of 1.
      * Automatically un-registers underlying callback when there are no collectors.
-     * TODO: Revert conflate and shareIn when #2408 is fixed
+     * N.B: This shared flow used to be conflated, using a trick reported in
+     * https://github.com/Kotlin/kotlinx.coroutines/issues/2408 is fixed
      */
-    override val locationFlow: Flow<Location> by lazy {
-        makeFlow(applicationContext).shareIn(
+    override val locationFlow: SharedFlow<Location> by lazy {
+        callbackFlow {
+            val producer = ProducersController(modeFlow, flowSelector)
+            producer.locationFlow.map {
+                trySend(it)
+            }.launchIn(this)
+
+            awaitClose {
+                producer.stop()
+            }
+        }.shareIn(
                 ProcessLifecycleOwner.get().lifecycleScope,
                 SharingStarted.WhileSubscribed(),
                 1
-        ).conflate()
+        )
+    }
+}
+
+private class ProducersController(
+        state: Flow<LocationProducerInfo>,
+        private val flowSelector: (LocationProducerInfo) -> Flow<Location>
+) {
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var internalJob: Job? = null
+    private var externalJob: Job? = null
+
+    val _locationFlow = MutableSharedFlow<Location>(
+            extraBufferCapacity = 256,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val locationFlow: SharedFlow<Location> = _locationFlow.asSharedFlow()
+
+    init {
+        state.map { mode ->
+            val flow = flowSelector(mode)
+            when (mode) {
+                InternalGps -> startInternal(flow)
+                is LocationProducerBtInfo -> startExternal(flow)
+            }
+        }.launchIn(scope)
     }
 
-    private fun makeFlow(context: Context): Flow<Location> {
-        val permission = ActivityCompat.checkSelfPermission(
-                context,
-                Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
+    fun stop() = scope.cancel()
 
-        return callbackFlow {
-            val callback = object : com.google.android.gms.location.LocationCallback() {
-                override fun onLocationResult(locationResult: LocationResult?) {
-                    for (loc in locationResult?.locations ?: listOf()) {
-                        trySend(Location(loc.latitude, loc.longitude, loc.speed, loc.altitude, loc.time))
-                    }
-                }
-            }
+    private fun startInternal(flow: Flow<Location>) {
+        externalJob?.run { cancel() }
+        internalJob = collectProducer(flow)
+    }
 
-            if (permission) {
-                fusedLocationClient.requestLocationUpdates(
-                        locationRequest,
-                        callback,
-                        looper
-                ).addOnFailureListener {
-                    /* In case of error, close the flow, so that the next subscription will trigger
-                     * a new flow creation. */
-                    close(it)
-                }
-            }
+    private fun startExternal(flow: Flow<Location>) {
+        internalJob?.run { cancel() }
+        externalJob = collectProducer(flow)
+    }
 
-            awaitClose {
-                fusedLocationClient.removeLocationUpdates(callback)
-            }
-        }
+    private fun collectProducer(locationFlow: Flow<Location>): Job {
+        return locationFlow.map {
+            _locationFlow.tryEmit(it)
+        }.launchIn(scope)
     }
 }

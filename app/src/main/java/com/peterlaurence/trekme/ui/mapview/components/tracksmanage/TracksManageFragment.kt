@@ -4,16 +4,15 @@ import android.app.Activity
 import android.app.Dialog
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
 import android.view.*
 import android.widget.EditText
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat.getDrawable
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
-import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -26,11 +25,10 @@ import com.peterlaurence.trekme.core.track.TrackImporter
 import com.peterlaurence.trekme.databinding.FragmentTracksManageBinding
 import com.peterlaurence.trekme.ui.mapview.components.tracksmanage.dialogs.ColorSelectDialog
 import com.peterlaurence.trekme.ui.mapview.events.MapViewEventBus
+import com.peterlaurence.trekme.util.collectWhileResumedIn
 import com.peterlaurence.trekme.viewmodel.mapview.TracksManageViewModel
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.launch
-import java.io.FileNotFoundException
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 
 /**
@@ -44,8 +42,7 @@ import javax.inject.Inject
  */
 @AndroidEntryPoint
 class TracksManageFragment : Fragment(), TrackAdapter.TrackSelectionListener {
-    private var _binding: FragmentTracksManageBinding? = null
-    private val binding get() = _binding!!
+    private var binding: FragmentTracksManageBinding? = null
 
     private var trackRenameMenuItem: MenuItem? = null
     private var trackAdapter: TrackAdapter? = null
@@ -57,12 +54,30 @@ class TracksManageFragment : Fragment(), TrackAdapter.TrackSelectionListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setHasOptionsMenu(true)
+
+        eventBus.trackNameChangeSignal.map {
+            trackAdapter?.notifyDataSetChanged()
+        }.collectWhileResumedIn(this)
+
+        eventBus.trackColorChangeEvent.map {
+            viewModel.changeRouteColor(it.routeId, it.color)
+            trackAdapter?.notifyDataSetChanged()
+        }.collectWhileResumedIn(this)
+
+        eventBus.trackImportEvent.map {
+            if (it is TrackImporter.GpxImportResult.GpxImportOk) {
+                onGpxParseResult(it)
+            } else {
+                onImportError()
+            }
+        }.collectWhileResumedIn(this)
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?,
                               savedInstanceState: Bundle?): View {
 
-        _binding = FragmentTracksManageBinding.inflate(inflater, container, false)
+        val binding = FragmentTracksManageBinding.inflate(inflater, container, false)
+        this.binding = binding
 
         initViews()
 
@@ -85,26 +100,13 @@ class TracksManageFragment : Fragment(), TrackAdapter.TrackSelectionListener {
             onCreateTrack()
         }
 
-        lifecycleScope.launch {
-            eventBus.trackNameChangeSignal.collect {
-                trackAdapter?.notifyDataSetChanged()
-            }
-        }
-
-        lifecycleScope.launch {
-            eventBus.trackColorChangeEvent.collect {
-                viewModel.changeRouteColor(it.routeId, it.color)
-                trackAdapter?.notifyDataSetChanged()
-            }
-        }
-
         return binding.root
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
 
-        _binding = null
+        binding = null
         trackAdapter = null
         trackRenameMenuItem = null
     }
@@ -126,39 +128,6 @@ class TracksManageFragment : Fragment(), TrackAdapter.TrackSelectionListener {
                 return super.onOptionsItemSelected(item)
             }
             else -> return super.onOptionsItemSelected(item)
-        }
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, resultData: Intent?) {
-        /* Check if the request code is the one we are interested in */
-        if (requestCode == TRACK_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
-            val ctx = context ?: return
-            val uri = resultData?.data ?: return
-
-            if (!viewModel.isFileSupported(uri)) {
-                val builder = AlertDialog.Builder(ctx)
-                builder.setView(View.inflate(context, R.layout.track_warning, null))
-                builder.setCancelable(false)
-                        .setPositiveButton(getString(R.string.ok_dialog), null)
-                val alert = builder.create()
-                alert.show()
-            }
-
-            /* Import the file */
-            // TODO: this shouldn't be done inside the lifecycleScope of this fragment, and events
-            // should be emitted in case of error as global messages (the activity listens to such message events)
-            lifecycleScope.launch {
-                try {
-                    val result = viewModel.applyGpxUri(uri)
-                    if (result is TrackImporter.GpxImportResult.GpxImportOk) {
-                        onGpxParseResult(result)
-                    }
-                } catch (e: FileNotFoundException) {
-                    onError(e.message ?: "")
-                } catch (e: TrackImporter.GpxParseException) {
-                    onError("Error with GPX file with uri $uri")
-                }
-            }
         }
     }
 
@@ -188,7 +157,7 @@ class TracksManageFragment : Fragment(), TrackAdapter.TrackSelectionListener {
 
     private fun initViews() {
         val ctx = context ?: return
-        val recyclerView = binding.recyclerView
+        val recyclerView = binding?.recyclerView ?: return
         recyclerView.setHasFixedSize(false)
 
         /* All cards are laid out vertically */
@@ -229,10 +198,9 @@ class TracksManageFragment : Fragment(), TrackAdapter.TrackSelectionListener {
         itemTouchHelper.attachToRecyclerView(recyclerView)
     }
 
-    private fun onError(message: String) {
+    private fun onImportError() {
         val view = view ?: return
         Snackbar.make(view, R.string.gpx_import_error_msg, Snackbar.LENGTH_LONG).show()
-        Log.e(TAG, message)
     }
 
     override fun onTrackSelected() {
@@ -240,7 +208,7 @@ class TracksManageFragment : Fragment(), TrackAdapter.TrackSelectionListener {
     }
 
     override fun onColorButtonClicked(route: RouteGson.Route) {
-        ColorSelectDialog.newInstance(route.id, route.color).show(requireActivity().supportFragmentManager, "ColorSelectDialog")
+        ColorSelectDialog.newInstance(route.compositeId, route.color).show(requireActivity().supportFragmentManager, "ColorSelectDialog")
     }
 
     override fun onVisibilityToggle(route: RouteGson.Route) {
@@ -254,6 +222,7 @@ class TracksManageFragment : Fragment(), TrackAdapter.TrackSelectionListener {
 
     /* Show or hide the panel indicating that there is no routes */
     private fun updateEmptyRoutePanelVisibility() {
+        val binding = this.binding ?: return
         val itemCount = viewModel.tracks.value?.size ?: 0
         if (itemCount > 0) {
             binding.emptyRoutePanel.visibility = View.GONE
@@ -267,13 +236,32 @@ class TracksManageFragment : Fragment(), TrackAdapter.TrackSelectionListener {
         trackRenameMenuItem?.isVisible = routeCnt > 0 && selectedInRange
     }
 
+    private val chooseTrackLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val ctx = context ?: return@registerForActivityResult
+            val uri = result?.data?.data ?: return@registerForActivityResult
+
+            if (!viewModel.isFileSupported(uri)) {
+                val builder = AlertDialog.Builder(ctx)
+                builder.setView(View.inflate(context, R.layout.track_warning, null))
+                builder.setCancelable(false)
+                        .setPositiveButton(getString(R.string.ok_dialog), null)
+                val alert = builder.create()
+                alert.show()
+            }
+
+            /* Import the file */
+            viewModel.applyGpxUri(uri)
+        }
+    }
+
     private fun onCreateTrack() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
         intent.addCategory(Intent.CATEGORY_OPENABLE)
 
         /* Search for all documents available via installed storage providers */
         intent.type = "*/*"
-        startActivityForResult(intent, TRACK_REQUEST_CODE)
+        chooseTrackLauncher.launch(intent)
     }
 
     interface TrackChangeListener {
@@ -338,7 +326,6 @@ class TracksManageFragment : Fragment(), TrackAdapter.TrackSelectionListener {
 
     companion object {
         const val TAG = "TracksManageFragment"
-        private const val TRACK_REQUEST_CODE = 1337
         private const val ROUTE_INDEX = "routeIndex"
     }
 }

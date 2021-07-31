@@ -5,6 +5,7 @@ import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.bluetooth.BluetoothAdapter
 import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
@@ -18,6 +19,7 @@ import android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.ActionBarDrawerToggle
@@ -42,6 +44,7 @@ import com.peterlaurence.trekme.databinding.ActivityMainBinding
 import com.peterlaurence.trekme.repositories.download.DownloadRepository
 import com.peterlaurence.trekme.repositories.map.MapRepository
 import com.peterlaurence.trekme.service.event.*
+import com.peterlaurence.trekme.ui.gpspro.events.GpsProEvents
 import com.peterlaurence.trekme.ui.maplist.events.*
 import com.peterlaurence.trekme.util.collectWhileStarted
 import com.peterlaurence.trekme.viewmodel.MainActivityViewModel
@@ -59,7 +62,25 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
     private lateinit var binding: ActivityMainBinding
 
     private val navController: NavController by lazy {
-        findNavController(R.id.nav_host_fragment)
+        findNavController(R.id.nav_host_fragment).apply {
+            /* A nice way to control the action-bar depending on the destination */
+            addOnDestinationChangedListener { _, destination, _ ->
+                val title = when (destination.id) {
+                    R.id.gpsProPurchaseFragment -> getString(R.string.gps_pro_name)
+                    R.id.gpsProFragment -> getString(R.string.select_bt_devices_title)
+                    R.id.btDeviceSettingsFragment -> getString(R.string.bt_device_frgmt_title)
+                    R.id.wifiP2pFragment -> getString(R.string.wifip2p_title)
+                    R.id.mapCreateFragment -> getString(R.string.mapcreate_title)
+                    R.id.recordFragment -> getString(R.string.recording_frgmt_title)
+                    R.id.mapImportFragment -> getString(R.string.import_title)
+                    R.id.mapViewFragment -> ""
+                    R.id.markerManageFragment -> ""
+                    R.id.googleMapWmtsViewFragment -> ""
+                    else -> getString(R.string.app_name)
+                }
+                supportActionBar?.title = title
+            }
+        }
     }
 
     @Inject
@@ -67,6 +88,9 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
 
     @Inject
     lateinit var downloadRepository: DownloadRepository
+
+    @Inject
+    lateinit var gpsProEvents: GpsProEvents
 
     @Inject
     lateinit var appEventBus: AppEventBus
@@ -279,6 +303,22 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
             requestBackgroundLocationPermission(this@MainActivity)
         }
 
+        appEventBus.requestBluetoothEnableFlow.collectWhileStarted(this) {
+            bluetoothLauncher.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
+        }
+
+        appEventBus.billingFlow.collectWhileStarted(this) {
+            it.billingClient.launchBillingFlow(this, it.flowParams)
+        }
+
+        gpsProEvents.showGpsProFragmentSignal.collectWhileStarted(this) {
+            showGpsProFragmentAfterPurchase()
+        }
+
+        gpsProEvents.showBtDeviceSettingsFragmentSignal.collectWhileStarted(this) {
+            showBtDeviceSettingsFragment()
+        }
+
         downloadRepository.downloadEvent.collectWhileStarted(this) {
             onMapDownloadEvent(it)
         }
@@ -328,6 +368,7 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
             R.id.nav_select_map -> showMapListFragment()
             R.id.nav_create -> showMapCreateFragment()
             R.id.nav_record -> showRecordFragment()
+            R.id.nav_gps_plus -> showGpsProPurchaseFragment()
             R.id.nav_import -> showMapImportFragment()
             R.id.nav_share -> showWifiP2pFragment()
             R.id.nav_settings -> showSettingsFragment()
@@ -387,6 +428,19 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         navController.navigate(R.id.action_global_recordFragment)
     }
 
+    private fun showGpsProPurchaseFragment() {
+        navController.navigate(R.id.action_global_gpsProPurchaseFragment)
+    }
+
+    private fun showGpsProFragmentAfterPurchase() {
+        navController.popBackStack(R.id.gpsProPurchaseFragment, true)
+        navController.navigate(R.id.action_global_gpsProFragment)
+    }
+
+    private fun showBtDeviceSettingsFragment() {
+        navController.navigate(R.id.action_gpsProFragment_to_btDeviceSettingsFragment)
+    }
+
     private fun showSettingsFragment() {
         navController.navigate(R.id.action_global_settingsFragment)
     }
@@ -410,6 +464,7 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
 
     override fun onRequestPermissionsResult(requestCode: Int,
                                             permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         /* In the case of storage perm, we should restart the app (only applicable for Android < 10) */
         if (requestCode == REQUEST_STORAGE) {
             /* If Android >= 10 we don't need to restart the activity as we don't request write permission */
@@ -504,4 +559,27 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         notifyMgr?.notify(event.mapId, builder.build())
         Snackbar.make(binding.navView, archiveOkMsg, Snackbar.LENGTH_SHORT).show()
     }
+
+    private val bluetoothLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        when (result.resultCode) {
+            Activity.RESULT_OK -> appEventBus.bluetoothEnabled(true)
+            Activity.RESULT_CANCELED -> appEventBus.bluetoothEnabled(false)
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+
+        outState.putString(ACTIONBAR_TITLE, supportActionBar?.title?.toString())
+    }
+
+    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        super.onRestoreInstanceState(savedInstanceState)
+
+        savedInstanceState.getString(ACTIONBAR_TITLE)?.also {
+            supportActionBar?.title = it
+        }
+    }
 }
+
+private const val ACTIONBAR_TITLE = "actionBarTitle"

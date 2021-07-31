@@ -15,6 +15,7 @@ import com.peterlaurence.trekme.core.TrekMeContext
 import com.peterlaurence.trekme.core.events.AppEventBus
 import com.peterlaurence.trekme.core.events.StandardMessage
 import com.peterlaurence.trekme.core.fileprovider.TrekmeFilesProvider
+import com.peterlaurence.trekme.core.map.maploader.MapLoader
 import com.peterlaurence.trekme.core.track.*
 import com.peterlaurence.trekme.events.recording.GpxRecordEvents
 import com.peterlaurence.trekme.repositories.recording.GpxRepository
@@ -31,7 +32,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
@@ -54,6 +54,7 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class RecordingStatisticsViewModel @Inject constructor(
+        private val mapLoader: MapLoader,
         private val gpxRecordEvents: GpxRecordEvents,
         private val gpxRepository: GpxRepository,
         private val appEventBus: AppEventBus,
@@ -149,12 +150,7 @@ class RecordingStatisticsViewModel @Inject constructor(
     }
 
     fun getRecordingUri(recordingData: RecordingData): Uri? {
-        val gpxFile = getGpxFileForId(recordingData.id)
-        return if (gpxFile != null) TrekmeFilesProvider.generateUri(gpxFile) else null
-    }
-
-    private fun getGpxFileForId(id: Int): File? {
-        return recordings.firstOrNull { it.id() == id }
+        return TrekmeFilesProvider.generateUri(recordingData.gpxFile)
     }
 
     /**
@@ -176,7 +172,7 @@ class RecordingStatisticsViewModel @Inject constructor(
                         remove()
                         recordingsToData[newFile] = newData
                     }
-                    updateLiveData()
+                    updateRecordings()
                     return
                 }
             }
@@ -184,51 +180,56 @@ class RecordingStatisticsViewModel @Inject constructor(
     }
 
     fun onRequestDeleteRecordings(recordingDataList: List<RecordingData>) = viewModelScope.launch {
-        val ids = recordingDataList.map { it.id }
-        val recordingsToDelete = recordings.filter { it.id() in ids }
-        var success = true
-        supervisorScope {
-            with(recordingsToData.iterator()) {
-                forEach {
-                    val file = it.key
-                    if (file in recordingsToDelete) {
-                        launch(Dispatchers.IO) {
-                            runCatching {
-                                if (file.exists()) {
-                                    if (!file.delete()) success = false
-                                }
-                            }.onFailure {
-                                success = false
+        /* Remove GPX files */
+        launch {
+            val gpxFiles = recordingDataList.map { it.gpxFile }
+            val recordingsToDelete = gpxFiles.filter { it in recordings }
+            var success = true
+            val iter = recordingsToData.iterator()
+            iter.forEach {
+                val file = it.key
+                if (file in recordingsToDelete) {
+                    launch(Dispatchers.IO) {
+                        runCatching {
+                            if (file.exists()) {
+                                if (!file.delete()) success = false
                             }
+                        }.onFailure {
+                            success = false
                         }
-                        /* Immediately remove the element, even if the real removal is pending */
-                        remove()
                     }
+                    /* Immediately remove the element, even if the real removal is pending */
+                    iter.remove()
                 }
             }
+            updateRecordings()
 
-            updateLiveData()
+            /* If only one removal failed, notify the user */
+            if (!success) {
+                eventBus.postRecordingDeletionFailed()
+            }
         }
 
-        /* If only one removal failed, notify the user */
-        if (!success) {
-            eventBus.postRecordingDeletionFailed()
+        /* Remove corresponding tracks on existing maps */
+        launch {
+            val trkIds = recordingDataList.mapNotNull { it.trkId }
+            mapLoader.deleteRoutes(trkIds)
         }
     }
 
     fun onRequestShowElevation(recordingData: RecordingData) = viewModelScope.launch {
         /* If we already computed elevation data for this same gpx file, no need to continue */
         val gpxForElevation = gpxRepository.gpxForElevation.replayCache.firstOrNull()
-        if (gpxForElevation != null && gpxForElevation.id == recordingData.id) return@launch
+        if (gpxForElevation != null && gpxForElevation.gpxFile == recordingData.gpxFile) return@launch
 
         /* Notify the repo that we're about to submit new data, invalidating the existing one */
         gpxRepository.resetGpxForElevation()
 
         withContext(Dispatchers.IO) {
-            val gpxFile = getGpxFileForId(recordingData.id)
-            val gpx = gpxFile?.let {
-                parseGpxSafely(FileInputStream(it))
-            }
+            val gpxFile = recordingData.gpxFile
+            val inputStream = runCatching { FileInputStream(gpxFile) }.getOrNull()
+                    ?: return@withContext
+            val gpx = parseGpxSafely(inputStream)
             if (gpx != null) {
                 gpxRepository.setGpxForElevation(gpx, gpxFile)
             }
@@ -242,10 +243,10 @@ class RecordingStatisticsViewModel @Inject constructor(
         }
 
         setTrackStatistics(gpx)
-        updateLiveData()
+        updateRecordings()
     }
 
-    private fun updateLiveData() {
+    private fun updateRecordings() {
         /* Transform a defensive copy of the original Map - the view uses DiffUtils, which performs
          * background calculations on the given data structure. */
         val data = recordingsToData.toMap().values.sortedByDescending {
@@ -261,7 +262,7 @@ class RecordingStatisticsViewModel @Inject constructor(
      */
     private fun initDataSet() = viewModelScope.launch {
         updateRecordingsToGpxMap()
-        updateLiveData()
+        updateRecordings()
     }
 
     /**
@@ -281,10 +282,12 @@ class RecordingStatisticsViewModel @Inject constructor(
     }
 
     private fun makeRecordingData(gpxFile: File, gpx: Gpx? = null): RecordingData {
+        val firstTrk = gpx?.tracks?.firstOrNull()
         return RecordingData(
-                gpxFile.id(),
+                gpxFile,
                 FileUtils.getFileNameWithoutExtention(gpxFile),
-                gpx?.tracks?.firstOrNull()?.statistics,
+                firstTrk?.statistics,
+                firstTrk?.id,
                 gpx?.metadata?.time
         )
     }
@@ -323,7 +326,10 @@ class RecordingStatisticsViewModel @Inject constructor(
 private const val TAG = "RecordingStatisticsVM"
 
 /**
- * A [RecordingData] is just wrapper on the [File] and its corresponding [TrackStatistics] data and
- * timestamp. The timestamp is used to sort visual elements.
+ * A [RecordingData] is a wrapper on the [File] and various other data such as the [TrackStatistics]
+ * data, the id of the track (if any), and timestamp. The timestamp is used to sort visual elements.
  */
-data class RecordingData(val id: Int, val name: String, val statistics: TrackStatistics? = null, val time: Long? = null)
+data class RecordingData(val gpxFile: File, val name: String,
+                         val statistics: TrackStatistics? = null,
+                         val trkId: String? = null,
+                         val time: Long? = null)
